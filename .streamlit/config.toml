@@ -1,0 +1,21 @@
+[general]
+# Configuration générale (pas d'email requis)
+
+[server]
+# Port par défaut
+port = 8501
+# CORS et protection CSRF (compatibles)
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+# Ouvre automatiquement le navigateur
+gatherUsageStats = false
+
+[theme]
+# Thème personnalisé
+primaryColor = "#1f77b4"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"

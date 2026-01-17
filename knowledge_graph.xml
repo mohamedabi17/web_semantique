@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+   xmlns:ex="http://example.org/master2/ontology#"
+   xmlns:foaf="http://xmlns.com/foaf/0.1/"
+   xmlns:owl="http://www.w3.org/2002/07/owl#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#worksAt">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">travaille à</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://schema.org/Organization"/>
+    <rdfs:comment xml:lang="fr">Relation entre une personne et son lieu de travail</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#studiesAt">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">étudie à</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://schema.org/Organization"/>
+    <rdfs:comment xml:lang="fr">Relation entre un étudiant et son établissement</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/data#zoubida_kedad">
+    <rdf:type rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:label xml:lang="fr">Zoubida Kedad</rdfs:label>
+    <foaf:name xml:lang="fr">Zoubida Kedad</foaf:name>
+    <ex:teachesSubject rdf:resource="http://example.org/master2/data#rdfs"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://schema.org/Organization">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="fr">Organisation</rdfs:label>
+    <rdfs:comment xml:lang="fr">Classe Schema.org représentant une entité organisationnelle</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N73cbf2bb9c784840af75d33cd92abe95">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="http://example.org/master2/ontology#author"/>
+    <owl:someValuesFrom rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://xmlns.com/foaf/0.1/name">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+    <rdfs:label xml:lang="fr">nom</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://schema.org/Place">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="fr">Lieu</rdfs:label>
+    <rdfs:comment xml:lang="fr">Classe Schema.org représentant un lieu géographique ou une institution</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#teaches">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">enseigne à</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://schema.org/Place"/>
+    <rdfs:comment xml:lang="fr">Relation entre une personne et le lieu où elle enseigne</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#intitule">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+    <rdfs:label xml:lang="fr">intitulé</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/master2/ontology#Document"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:comment xml:lang="fr">Titre ou intitulé d'un document</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#collaboratesWith">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">collabore avec</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:comment xml:lang="fr">Relation de collaboration entre deux personnes</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#manages">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">gère</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://schema.org/Organization"/>
+    <rdfs:comment xml:lang="fr">Relation de gestion/direction d'une organisation</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#nom">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:comment xml:lang="fr">Nom complet d'une personne</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#relatedTo">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">en relation avec</rdfs:label>
+    <rdfs:domain rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:comment xml:lang="fr">Relation générique entre deux ressources</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://xmlns.com/foaf/0.1/Person">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="fr">Personne</rdfs:label>
+    <rdfs:comment xml:lang="fr">Classe FOAF représentant un individu humain</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#age">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+    <rdfs:label xml:lang="fr">âge</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/master2/ontology#Person"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+    <rdfs:comment xml:lang="fr">Âge d'une personne en années</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#ValidatedCourse">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:subClassOf rdf:resource="http://example.org/master2/ontology#Document"/>
+    <rdfs:subClassOf rdf:nodeID="N73cbf2bb9c784840af75d33cd92abe95"/>
+    <rdfs:label xml:lang="fr">Cours Validé</rdfs:label>
+    <rdfs:comment xml:lang="fr">Cours ayant au moins un auteur identifié (contrainte OWL)</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#Document">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="fr">Document</rdfs:label>
+    <rdfs:comment xml:lang="fr">Classe représentant un document, cours ou publication</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#traite_de">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">traite de</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/master2/ontology#Document"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:comment xml:lang="fr">Relation entre un document et son sujet principal</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#locatedIn">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">situé à</rdfs:label>
+    <rdfs:domain rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:range rdf:resource="http://schema.org/Place"/>
+    <rdfs:comment xml:lang="fr">Relation de localisation géographique</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#a_redige">
+    <rdfs:comment xml:lang="fr">Relation entre un auteur et un document qu'il a rédigé</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#author">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">a rédigé</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://example.org/master2/ontology#Document"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/ontology#teachesSubject">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="fr">enseigne la matière</rdfs:label>
+    <rdfs:domain rdf:resource="http://xmlns.com/foaf/0.1/Person"/>
+    <rdfs:range rdf:resource="http://example.org/master2/ontology#Document"/>
+    <rdfs:comment xml:lang="fr">Relation entre un enseignant et la matière qu'il enseigne</rdfs:comment>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://example.org/master2/data#rdfs">
+    <rdf:type rdf:resource="http://example.org/master2/ontology#Document"/>
+    <rdfs:label xml:lang="fr">RDFS</rdfs:label>
+    <foaf:name xml:lang="fr">RDFS</foaf:name>
+  </rdf:Description>
+</rdf:RDF>

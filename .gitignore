@@ -1,0 +1,34 @@
+# Configuration de l'environnement virtuel Python
+venv/
+venv_kg/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ⚠️ FICHIERS SENSIBLES - NE PAS COMMITER
+.env
+*.env
+config_local.py
+
+# Fichiers de sortie générés
+*.ttl
+*.rdf
+*.owl
+*.xml
+graphe_connaissance.png
+texte_temp.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
