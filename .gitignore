@@ -1,22 +1,25 @@
-# Configuration de l'environnement virtuel Python
+# Environnement Python
 venv/
 venv_kg/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
 
-# ⚠️ FICHIERS SENSIBLES - NE PAS COMMITER
+# Fichiers sensibles - NE PAS COMMITER
 .env
 *.env
 config_local.py
 
-# Fichiers de sortie générés
-*.ttl
-*.rdf
-*.owl
-*.xml
-graphe_connaissance.png
+# Fichiers générés (outputs)
+outputs/*.ttl
+outputs/*.rdf
+outputs/*.owl
+outputs/*.xml
+outputs/*.png
 texte_temp.txt
 
 # IDE
@@ -25,10 +28,7 @@ texte_temp.txt
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
 
 # Logs
 *.log
