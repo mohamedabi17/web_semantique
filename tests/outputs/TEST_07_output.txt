@@ -1,0 +1,685 @@
+[OWLReasoningEngine] ✅ owlrl disponible (raisonnement OWL complet)
+================================================================================
+PROJET MASTER 2 - WEB SÉMANTIQUE
+Extraction de Graphe de Connaissances avec Architecture T-Box/A-Box
+================================================================================
+[CLEANUP] Ancien fichier supprimé : knowledge_graph.ttl
+[CLEANUP] Ancien fichier supprimé : knowledge_graph.xml
+[INFO] Texte chargé depuis stdin
+
+[INIT] Création d'un nouveau graphe RDF vide...
+  ✓ Graphe initialisé avec namespaces
+
+
+[T-BOX] Définition de l'ontologie...
+  ✓ Classe avec Restriction OWL créée : ex:ValidatedCourse
+    → Contrainte : DOIT avoir au moins un ex:author de type foaf:Person
+  ✓ Classes standards utilisées : foaf:Person, schema:Place, schema:Organization, ex:Document, ex:ValidatedCourse
+  ✓ ObjectProperties définies : ex:teaches, ex:teachesSubject, ex:author, ex:traite_de, ex:worksAt, ex:locatedIn, ex:collaboratesWith, ex:studiesAt, ex:manages, ex:relatedTo
+  ✓ DatatypeProperties définies : foaf:name, ex:intitule, ex:age
+[T-BOX] Ontologie définie avec succès !
+
+[NLP] Chargement du modèle spaCy français...
+  ✓ Modèle 'fr_core_news_sm' chargé avec succès
+
+
+================================================================================
+[MODULE 0] ENTRY GATE - Validation du texte source
+================================================================================
+[TEXTE SOURCE] : "Zoubida Kedad enseigne Versailles."
+✓ Texte valide - longueur: 34 caractères, 4 mots
+
+
+[A-BOX] Extraction des entités nommées avec MODULE 0++ (HybridNER)...
+  [Couche 2] EntityRuler configuré : Universités, Topics, Titres
+[HybridNERModule] ✅ Initialisé avec 7 couches activées
+
+================================================================================
+MODULE 0++ : EXTRACTION HYBRIDE NER (7 COUCHES)
+================================================================================
+
+[COUCHE 1] spaCy NER + EntityRuler
+--------------------------------------------------------------------------------
+  🧠 spaCy : 'Zoubida Kedad' → PER (conf: 0.90)
+  🧠 spaCy : 'Versailles' → LOC (conf: 0.85)
+
+  📊 Statistiques Couche 1 : 2 entités détectées
+     • LOC: 1
+     • PER: 1
+
+[COUCHE 3] Heuristiques PROPN
+--------------------------------------------------------------------------------
+
+  📊 Statistiques Couche 3 : 3 tokens PROPN analysés
+     • Aucune nouvelle entité (toutes déjà détectées)
+
+[COUCHE 4] Normalisation
+--------------------------------------------------------------------------------
+
+  📊 Statistiques Couche 4 : 0/2 entités normalisées
+
+[COUCHE 5] Déduplication
+--------------------------------------------------------------------------------
+
+  📊 Statistiques Couche 5 :
+     • Doublons éliminés : 0
+     • Sous-entités éliminées : 0
+
+[COUCHE 6] Filtrage Confiance (seuil: 0.6)
+--------------------------------------------------------------------------------
+
+  📊 Statistiques Couche 6 :
+     • Entités validées : 2
+     • Entités rejetées : 0
+================================================================================
+✅ RÉSULTAT FINAL : 2 entités extraites
+================================================================================
+
+[RAFFINEMENT] Re-classification intelligente des entités via Groq/Llama-3...
+  ✓ Confirmé : 'Zoubida Kedad' : PER
+  ✓ Confirmé : 'Versailles' : LOC
+[RAFFINEMENT] ✓ 2 entités re-classifiées
+
+
+[A-BOX] Instanciation des entités dans le graphe...
+[ConfidenceScorer] ✅ Initialisé
+  [Confidence] zoubida_kedad : 0.90 (source: hybrid_ner)
+  ✓ Instance créée : zoubida_kedad (type: Person, label: 'Zoubida Kedad')
+  [Confidence] versailles : 0.85 (source: hybrid_ner)
+  ✓ Instance créée : versailles (type: Place, label: 'Versailles')
+
+[A-BOX] Extraction des relations sémantiques avec LLM Mock...
+
+[MODULE 0++ - COUCHE 7] Mapping verbes → propriétés OWL
+--------------------------------------------------------------------------------
+  [Couche 2] EntityRuler configuré : Universités, Topics, Titres
+[HybridNERModule] ✅ Initialisé avec 7 couches activées
+  (Aucune relation verbale détectée)
+
+  🚀 Appel API Groq (Llama-3) pour : Zoubida Kedad ↔ Versailles
+    🔍 Contexte local : ...zoubida kedad enseigne versailles....
+  🎓 Priorité 0 : Détection 'enseigne' + matière 'Versailles' → Force teachesSubject (bypass validation)
+  🤖 Groq/Llama-3 a détecté : Zoubida Kedad --[teachesSubject]--> Versailles
+  ⚠️ teachesSubject rejeté : Versailles n'est pas un Document/Topic
+
+[RÉIFICATION] Application de la réification aux relations...
+[RÉIFICATION] 0 triplet(s) réifié(s) avec métadonnées dc:source
+
+
+================================================================================
+[MODULE 1] RAISONNEMENT OWL - Inférence de types et propriétés
+================================================================================
+  • 15 propriétés avec domain
+  • 15 propriétés avec range
+  • 1 relations rdfs:subClassOf
+[OWLReasoningEngine] Initialisé (mode: OWL complet)
+
+[OWLReasoningEngine] Application raisonnement OWL...
+  • Triplets avant raisonnement : 103
+  • Triplets après raisonnement : 370
+  ✅ 267 triplets inférés par raisonnement OWL
+[OWLReasoningEngine] ✅ Graphe cohérent (pas d'inconsistances)
+
+[MODULE 1] Ajout de métadonnées de confiance pour 267 triplets inférés...
+
+================================================================================
+[CONFIDENCE SYSTEM] Statistiques des scores de confiance
+================================================================================
+  • Entités avec score : 2
+  • Score minimum : 0.85
+  • Score maximum : 0.90
+  • Score moyen : 0.88
+================================================================================
+[EXPORT] Sérialisation du graphe RDF en deux formats
+================================================================================
+
+✓ Graphe exporté en TURTLE : knowledge_graph.ttl
+✓ Graphe exporté en RDF/XML : knowledge_graph.xml
+✓ Nombre total de triplets : 370
+
+[VISUALISATION] Génération du graphe visuel...
+  → 2 entités de données détectées
+  ⚠️  Aucune entité extraite à visualiser
+  💡 Conseil : Utilisez un texte avec des noms de personnes, organisations ou lieux
+
+================================================================================
+RÉSULTAT FINAL - FORMAT TURTLE
+================================================================================
+
+@prefix data: <http://example.org/master2/data#> .
+@prefix ex: <http://example.org/master2/ontology#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema1: <http://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+data:versailles a schema1:Place,
+        rdf:Statement,
+        owl:Thing,
+        foaf:Person ;
+    rdfs:label "Versailles"@fr ;
+    ex:confidence "0.85"^^xsd:float ;
+    ex:extractionMethod "hybrid_ner"^^xsd:string ;
+    owl:sameAs data:versailles ;
+    foaf:name "Versailles"@fr .
+
+data:zoubida_kedad a rdf:Statement,
+        owl:Thing,
+        foaf:Person ;
+    rdfs:label "Zoubida Kedad"@fr ;
+    ex:confidence "0.9"^^xsd:float ;
+    ex:extractionMethod "hybrid_ner"^^xsd:string ;
+    owl:sameAs data:zoubida_kedad ;
+    foaf:name "Zoubida Kedad"@fr .
+
+ex:a_redige rdfs:comment "Relation entre un auteur et un document qu'il a rédigé"@fr ;
+    owl:sameAs ex:a_redige .
+
+ex:nom rdfs:comment "Nom complet d'une personne"@fr ;
+    rdfs:range xsd:string ;
+    owl:sameAs ex:nom .
+
+rdf:HTML a rdfs:Datatype ;
+    owl:sameAs rdf:HTML .
+
+rdf:PlainLiteral a rdfs:Datatype ;
+    owl:sameAs rdf:PlainLiteral .
+
+rdf:XMLLiteral a rdfs:Datatype ;
+    owl:sameAs rdf:XMLLiteral .
+
+rdf:langString a rdfs:Datatype ;
+    owl:sameAs rdf:langString .
+
+rdf:type owl:sameAs rdf:type .
+
+rdfs:Literal a rdfs:Datatype ;
+    owl:sameAs rdfs:Literal .
+
+rdfs:comment a owl:AnnotationProperty ;
+    owl:sameAs rdfs:comment .
+
+rdfs:domain owl:sameAs rdfs:domain .
+
+rdfs:isDefinedBy a owl:AnnotationProperty ;
+    owl:sameAs rdfs:isDefinedBy .
+
+rdfs:label a owl:AnnotationProperty ;
+    owl:sameAs rdfs:label .
+
+rdfs:range owl:sameAs rdfs:range .
+
+rdfs:seeAlso a owl:AnnotationProperty ;
+    owl:sameAs rdfs:seeAlso .
+
+rdfs:subClassOf owl:sameAs rdfs:subClassOf .
+
+rdfs:subPropertyOf owl:sameAs rdfs:subPropertyOf .
+
+xsd:NCName a rdfs:Datatype ;
+    owl:sameAs xsd:NCName .
+
+xsd:NMTOKEN a rdfs:Datatype ;
+    owl:sameAs xsd:NMTOKEN .
+
+xsd:Name a rdfs:Datatype ;
+    owl:sameAs xsd:Name .
+
+xsd:anyURI a rdfs:Datatype ;
+    owl:sameAs xsd:anyURI .
+
+xsd:base64Binary a rdfs:Datatype ;
+    owl:sameAs xsd:base64Binary .
+
+xsd:boolean a rdfs:Datatype ;
+    owl:sameAs xsd:boolean .
+
+xsd:byte a rdfs:Datatype ;
+    owl:sameAs xsd:byte .
+
+xsd:date a rdfs:Datatype ;
+    owl:sameAs xsd:date .
+
+xsd:dateTime a rdfs:Datatype ;
+    owl:sameAs xsd:dateTime .
+
+xsd:dateTimeStamp a rdfs:Datatype ;
+    owl:sameAs xsd:dateTimeStamp .
+
+xsd:decimal a rdfs:Datatype ;
+    owl:sameAs xsd:decimal .
+
+xsd:double a rdfs:Datatype ;
+    owl:sameAs xsd:double .
+
+xsd:hexBinary a rdfs:Datatype ;
+    owl:sameAs xsd:hexBinary .
+
+xsd:int a rdfs:Datatype ;
+    owl:sameAs xsd:int .
+
+xsd:language a rdfs:Datatype ;
+    owl:sameAs xsd:language .
+
+xsd:long a rdfs:Datatype ;
+    owl:sameAs xsd:long .
+
+xsd:negativeInteger a rdfs:Datatype ;
+    owl:sameAs xsd:negativeInteger .
+
+xsd:nonNegativeInteger a rdfs:Datatype ;
+    owl:sameAs xsd:nonNegativeInteger .
+
+xsd:nonPositiveInteger a rdfs:Datatype ;
+    owl:sameAs xsd:nonPositiveInteger .
+
+xsd:normalizedString a rdfs:Datatype ;
+    owl:sameAs xsd:normalizedString .
+
+xsd:positiveInteger a rdfs:Datatype ;
+    owl:sameAs xsd:positiveInteger .
+
+xsd:short a rdfs:Datatype ;
+    owl:sameAs xsd:short .
+
+xsd:time a rdfs:Datatype ;
+    owl:sameAs xsd:time .
+
+xsd:token a rdfs:Datatype ;
+    owl:sameAs xsd:token .
+
+xsd:unsignedByte a rdfs:Datatype ;
+    owl:sameAs xsd:unsignedByte .
+
+xsd:unsignedInt a rdfs:Datatype ;
+    owl:sameAs xsd:unsignedInt .
+
+xsd:unsignedLong a rdfs:Datatype ;
+    owl:sameAs xsd:unsignedLong .
+
+xsd:unsignedShort a rdfs:Datatype ;
+    owl:sameAs xsd:unsignedShort .
+
+owl:backwardCompatibleWith a owl:AnnotationProperty ;
+    owl:sameAs owl:backwardCompatibleWith .
+
+owl:deprecated a owl:AnnotationProperty ;
+    owl:sameAs owl:deprecated .
+
+owl:disjointWith owl:sameAs owl:disjointWith .
+
+owl:equivalentClass owl:sameAs owl:equivalentClass .
+
+owl:equivalentProperty owl:sameAs owl:equivalentProperty .
+
+owl:incompatibleWith a owl:AnnotationProperty ;
+    owl:sameAs owl:incompatibleWith .
+
+owl:onProperty owl:sameAs owl:onProperty .
+
+owl:priorVersion a owl:AnnotationProperty ;
+    owl:sameAs owl:priorVersion .
+
+owl:sameAs owl:sameAs owl:sameAs .
+
+owl:someValuesFrom owl:sameAs owl:someValuesFrom .
+
+owl:versionInfo a owl:AnnotationProperty ;
+    owl:sameAs owl:versionInfo .
+
+ex:Person owl:sameAs ex:Person .
+
+xsd:integer a rdfs:Datatype ;
+    owl:sameAs xsd:integer .
+
+owl:Restriction owl:sameAs owl:Restriction .
+
+"0.85"^^xsd:float a xsd:float ;
+    owl:sameAs "0.85"^^xsd:float .
+
+"0.9"^^xsd:float a xsd:float ;
+    owl:sameAs "0.9"^^xsd:float .
+
+"Confidence Score"@en owl:sameAs "Confidence Score"@en .
+
+"Classe FOAF représentant un individu humain"@fr owl:sameAs "Classe FOAF représentant un individu humain"@fr .
+
+"Classe Schema.org représentant un lieu géographique ou une institution"@fr owl:sameAs "Classe Schema.org représentant un lieu géographique ou une institution"@fr .
+
+"Classe Schema.org représentant une entité organisationnelle"@fr owl:sameAs "Classe Schema.org représentant une entité organisationnelle"@fr .
+
+"Classe représentant un document, cours ou publication"@fr owl:sameAs "Classe représentant un document, cours ou publication"@fr .
+
+"Cours Validé"@fr owl:sameAs "Cours Validé"@fr .
+
+"Cours ayant au moins un auteur identifié (contrainte OWL)"@fr owl:sameAs "Cours ayant au moins un auteur identifié (contrainte OWL)"@fr .
+
+"Document"@fr owl:sameAs "Document"@fr .
+
+"Lieu"@fr owl:sameAs "Lieu"@fr .
+
+"Nom complet d'une personne"@fr owl:sameAs "Nom complet d'une personne"@fr .
+
+"Organisation"@fr owl:sameAs "Organisation"@fr .
+
+"Personne"@fr owl:sameAs "Personne"@fr .
+
+"Relation de collaboration entre deux personnes"@fr owl:sameAs "Relation de collaboration entre deux personnes"@fr .
+
+"Relation de gestion/direction d'une organisation"@fr owl:sameAs "Relation de gestion/direction d'une organisation"@fr .
+
+"Relation de localisation géographique"@fr owl:sameAs "Relation de localisation géographique"@fr .
+
+"Relation entre un auteur et un document qu'il a rédigé"@fr owl:sameAs "Relation entre un auteur et un document qu'il a rédigé"@fr .
+
+"Relation entre un document et son sujet principal"@fr owl:sameAs "Relation entre un document et son sujet principal"@fr .
+
+"Relation entre un enseignant et la matière qu'il enseigne"@fr owl:sameAs "Relation entre un enseignant et la matière qu'il enseigne"@fr .
+
+"Relation entre un étudiant et son établissement"@fr owl:sameAs "Relation entre un étudiant et son établissement"@fr .
+
+"Relation entre une personne et le lieu où elle enseigne"@fr owl:sameAs "Relation entre une personne et le lieu où elle enseigne"@fr .
+
+"Relation entre une personne et son lieu de travail"@fr owl:sameAs "Relation entre une personne et son lieu de travail"@fr .
+
+"Relation générique entre deux ressources"@fr owl:sameAs "Relation générique entre deux ressources"@fr .
+
+"Score de confiance d'une assertion (0.0 à 1.0)"@fr owl:sameAs "Score de confiance d'une assertion (0.0 à 1.0)"@fr .
+
+"Titre ou intitulé d'un document"@fr owl:sameAs "Titre ou intitulé d'un document"@fr .
+
+"a rédigé"@fr owl:sameAs "a rédigé"@fr .
+
+"collabore avec"@fr owl:sameAs "collabore avec"@fr .
+
+"en relation avec"@fr owl:sameAs "en relation avec"@fr .
+
+"enseigne la matière"@fr owl:sameAs "enseigne la matière"@fr .
+
+"enseigne à"@fr owl:sameAs "enseigne à"@fr .
+
+"gère"@fr owl:sameAs "gère"@fr .
+
+"intitulé"@fr owl:sameAs "intitulé"@fr .
+
+"nom"@fr owl:sameAs "nom"@fr .
+
+"situé à"@fr owl:sameAs "situé à"@fr .
+
+"traite de"@fr owl:sameAs "traite de"@fr .
+
+"travaille à"@fr owl:sameAs "travaille à"@fr .
+
+"Âge d'une personne en années"@fr owl:sameAs "Âge d'une personne en années"@fr .
+
+"âge"@fr owl:sameAs "âge"@fr .
+
+"étudie à"@fr owl:sameAs "étudie à"@fr .
+
+ex:age a owl:DatatypeProperty ;
+    rdfs:label "âge"@fr ;
+    rdfs:comment "Âge d'une personne en années"@fr ;
+    rdfs:domain ex:Person ;
+    rdfs:range xsd:integer ;
+    rdfs:subPropertyOf ex:age ;
+    owl:equivalentProperty ex:age ;
+    owl:sameAs ex:age .
+
+ex:collaboratesWith a owl:ObjectProperty ;
+    rdfs:label "collabore avec"@fr ;
+    rdfs:comment "Relation de collaboration entre deux personnes"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range owl:Thing,
+        foaf:Person ;
+    rdfs:subPropertyOf ex:collaboratesWith ;
+    owl:equivalentProperty ex:collaboratesWith ;
+    owl:sameAs ex:collaboratesWith .
+
+ex:confidence a owl:DatatypeProperty ;
+    rdfs:label "Confidence Score"@en ;
+    rdfs:comment "Score de confiance d'une assertion (0.0 à 1.0)"@fr ;
+    rdfs:domain rdf:Statement ;
+    rdfs:range xsd:float ;
+    rdfs:subPropertyOf ex:confidence ;
+    owl:equivalentProperty ex:confidence ;
+    owl:sameAs ex:confidence .
+
+ex:extractionMethod a owl:DatatypeProperty ;
+    rdfs:domain rdf:Statement ;
+    rdfs:range xsd:string ;
+    rdfs:subPropertyOf ex:extractionMethod ;
+    owl:equivalentProperty ex:extractionMethod ;
+    owl:sameAs ex:extractionMethod .
+
+ex:intitule a owl:DatatypeProperty ;
+    rdfs:label "intitulé"@fr ;
+    rdfs:comment "Titre ou intitulé d'un document"@fr ;
+    rdfs:domain ex:Document,
+        owl:Thing ;
+    rdfs:range xsd:string ;
+    rdfs:subPropertyOf ex:intitule ;
+    owl:equivalentProperty ex:intitule ;
+    owl:sameAs ex:intitule .
+
+ex:locatedIn a owl:ObjectProperty ;
+    rdfs:label "situé à"@fr ;
+    rdfs:comment "Relation de localisation géographique"@fr ;
+    rdfs:domain rdfs:Resource ;
+    rdfs:range schema1:Place,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:locatedIn ;
+    owl:equivalentProperty ex:locatedIn ;
+    owl:sameAs ex:locatedIn .
+
+ex:manages a owl:ObjectProperty ;
+    rdfs:label "gère"@fr ;
+    rdfs:comment "Relation de gestion/direction d'une organisation"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range schema1:Organization,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:manages ;
+    owl:equivalentProperty ex:manages ;
+    owl:sameAs ex:manages .
+
+ex:relatedTo a owl:ObjectProperty ;
+    rdfs:label "en relation avec"@fr ;
+    rdfs:comment "Relation générique entre deux ressources"@fr ;
+    rdfs:domain rdfs:Resource ;
+    rdfs:range rdfs:Resource ;
+    rdfs:subPropertyOf ex:relatedTo ;
+    owl:equivalentProperty ex:relatedTo ;
+    owl:sameAs ex:relatedTo .
+
+ex:studiesAt a owl:ObjectProperty ;
+    rdfs:label "étudie à"@fr ;
+    rdfs:comment "Relation entre un étudiant et son établissement"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range schema1:Organization,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:studiesAt ;
+    owl:equivalentProperty ex:studiesAt ;
+    owl:sameAs ex:studiesAt .
+
+ex:teaches a owl:ObjectProperty ;
+    rdfs:label "enseigne à"@fr ;
+    rdfs:comment "Relation entre une personne et le lieu où elle enseigne"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range schema1:Place,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:teaches ;
+    owl:equivalentProperty ex:teaches ;
+    owl:sameAs ex:teaches .
+
+ex:teachesSubject a owl:ObjectProperty ;
+    rdfs:label "enseigne la matière"@fr ;
+    rdfs:comment "Relation entre un enseignant et la matière qu'il enseigne"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range ex:Document,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:teachesSubject ;
+    owl:equivalentProperty ex:teachesSubject ;
+    owl:sameAs ex:teachesSubject .
+
+ex:traite_de a owl:ObjectProperty ;
+    rdfs:label "traite de"@fr ;
+    rdfs:comment "Relation entre un document et son sujet principal"@fr ;
+    rdfs:domain ex:Document,
+        owl:Thing ;
+    rdfs:range rdfs:Resource ;
+    rdfs:subPropertyOf ex:traite_de ;
+    owl:equivalentProperty ex:traite_de ;
+    owl:sameAs ex:traite_de .
+
+ex:worksAt a owl:ObjectProperty ;
+    rdfs:label "travaille à"@fr ;
+    rdfs:comment "Relation entre une personne et son lieu de travail"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range schema1:Organization,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:worksAt ;
+    owl:equivalentProperty ex:worksAt ;
+    owl:sameAs ex:worksAt .
+
+owl:Nothing a owl:Class ;
+    rdfs:subClassOf _:N03b71a67140d45849ac2e16f92fc5964,
+        ex:Document,
+        ex:ValidatedCourse,
+        schema1:Organization,
+        schema1:Place,
+        owl:Nothing,
+        owl:Thing,
+        foaf:Person ;
+    owl:equivalentClass owl:Nothing ;
+    owl:sameAs owl:Nothing .
+
+foaf:name a owl:DatatypeProperty ;
+    rdfs:label "nom"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:subPropertyOf foaf:name ;
+    owl:equivalentProperty foaf:name ;
+    owl:sameAs foaf:name .
+
+"hybrid_ner"^^xsd:string a xsd:string ;
+    owl:sameAs "hybrid_ner"^^xsd:string .
+
+"Versailles"@fr owl:sameAs "Versailles"@fr .
+
+"Zoubida Kedad"@fr owl:sameAs "Zoubida Kedad"@fr .
+
+ex:ValidatedCourse a owl:Class ;
+    rdfs:label "Cours Validé"@fr ;
+    rdfs:comment "Cours ayant au moins un auteur identifié (contrainte OWL)"@fr ;
+    rdfs:subClassOf _:N03b71a67140d45849ac2e16f92fc5964,
+        ex:Document,
+        ex:ValidatedCourse,
+        owl:Thing ;
+    owl:equivalentClass ex:ValidatedCourse ;
+    owl:sameAs ex:ValidatedCourse .
+
+ex:author a owl:ObjectProperty ;
+    rdfs:label "a rédigé"@fr ;
+    rdfs:domain owl:Thing,
+        foaf:Person ;
+    rdfs:range ex:Document,
+        owl:Thing ;
+    rdfs:subPropertyOf ex:author ;
+    owl:equivalentProperty ex:author ;
+    owl:sameAs ex:author .
+
+xsd:float a rdfs:Datatype ;
+    owl:disjointWith xsd:string ;
+    owl:sameAs xsd:float .
+
+rdf:Statement owl:sameAs rdf:Statement .
+
+rdfs:Resource owl:sameAs rdfs:Resource .
+
+xsd:string a rdfs:Datatype ;
+    owl:sameAs xsd:string .
+
+owl:DatatypeProperty owl:sameAs owl:DatatypeProperty .
+
+schema1:Organization a owl:Class ;
+    rdfs:label "Organisation"@fr ;
+    rdfs:comment "Classe Schema.org représentant une entité organisationnelle"@fr ;
+    rdfs:subClassOf schema1:Organization,
+        owl:Thing ;
+    owl:equivalentClass schema1:Organization ;
+    owl:sameAs schema1:Organization .
+
+schema1:Place a owl:Class ;
+    rdfs:label "Lieu"@fr ;
+    rdfs:comment "Classe Schema.org représentant un lieu géographique ou une institution"@fr ;
+    rdfs:subClassOf schema1:Place,
+        owl:Thing ;
+    owl:equivalentClass schema1:Place ;
+    owl:sameAs schema1:Place .
+
+owl:Class owl:sameAs owl:Class .
+
+ex:Document a owl:Class ;
+    rdfs:label "Document"@fr ;
+    rdfs:comment "Classe représentant un document, cours ou publication"@fr ;
+    rdfs:subClassOf ex:Document,
+        owl:Thing ;
+    owl:equivalentClass ex:Document ;
+    owl:sameAs ex:Document .
+
+owl:AnnotationProperty owl:sameAs owl:AnnotationProperty .
+
+owl:ObjectProperty owl:sameAs owl:ObjectProperty .
+
+foaf:Person a owl:Class ;
+    rdfs:label "Personne"@fr ;
+    rdfs:comment "Classe FOAF représentant un individu humain"@fr ;
+    rdfs:subClassOf owl:Thing,
+        foaf:Person ;
+    owl:equivalentClass foaf:Person ;
+    owl:sameAs foaf:Person .
+
+owl:Thing a owl:Class ;
+    rdfs:subClassOf owl:Thing ;
+    owl:equivalentClass owl:Thing ;
+    owl:sameAs owl:Thing .
+
+rdfs:Datatype owl:sameAs rdfs:Datatype .
+
+_:N03b71a67140d45849ac2e16f92fc5964 a owl:Restriction ;
+    rdfs:subClassOf _:N03b71a67140d45849ac2e16f92fc5964 ;
+    owl:equivalentClass _:N03b71a67140d45849ac2e16f92fc5964 ;
+    owl:onProperty ex:author ;
+    owl:sameAs _:N03b71a67140d45849ac2e16f92fc5964 ;
+    owl:someValuesFrom foaf:Person .
+
+
+
+================================================================================
+STATISTIQUES DU GRAPHE
+================================================================================
+Classes (owl:Class) : 7
+  → Dont classes avec restrictions OWL : 1 (ex:ValidatedCourse)
+ObjectProperties : 10
+DatatypeProperties : 5
+Restrictions OWL : 1
+Instances extraites : 2
+Triplets réifiés : 2
+Total de triplets RDF : 370
+================================================================================
+
+✓ Pipeline terminé avec succès !
+✓ Votre graphe de connaissances respecte les standards OWL et RDFS
+✓ Architecture T-Box/A-Box clairement séparée
+✓ Restrictions OWL appliquées (ex:ValidatedCourse)
+✓ Réification appliquée pour la traçabilité
+✓ Extraction de relations via API Hugging Face RÉELLE (Mistral-7B) ⭐
+✓ Double sérialisation : Turtle + RDF/XML
+

@@ -1,0 +1,1 @@
+Jean Dupont a publié des articles sur SPARQL et OWL. Il dirige le laboratoire d'ontologies à Lyon.

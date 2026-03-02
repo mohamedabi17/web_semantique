@@ -4,6 +4,9 @@
 echo "🚀 Lancement de l'interface web Streamlit..."
 echo ""
 
+# Se déplacer vers le répertoire racine du projet
+cd "$(dirname "$0")/.." || exit 1
+
 # Vérifier si l'environnement virtuel existe
 if [ ! -d "venv" ]; then
     echo "❌ Environnement virtuel non trouvé. Créez-le avec : python3 -m venv venv"

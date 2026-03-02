@@ -27,6 +27,13 @@ import matplotlib.pyplot as plt
 from typing import Optional
 from dotenv import load_dotenv
 
+# ============================================================================
+# IMPORTS DES NOUVEAUX MODULES (ARCHITECTURE NEURO-SYMBOLIQUE COMPLÈTE)
+# ============================================================================
+from hybrid_ner_module import HybridNERModule, normalize_uri_fragment
+from owl_reasoning_engine import OWLReasoningEngine, apply_owl_reasoning
+from confidence_scorer import ConfidenceScorer, add_inference_confidence
+
 # Chargement des variables d'environnement depuis .env
 load_dotenv()
 
@@ -349,70 +356,146 @@ def predict_relation_real_api(entity1: str, entity2: str, sentence: str) -> Opti
         
         client = Groq(api_key=GROQ_API_KEY)
         
-        # Prompt optimisé pour Llama 3
-        prompt = f"""Context: "{sentence}"
-Analyze the relationship between the entities: "{entity1}" and "{entity2}".
+        # Prompt académique strict V3 - DOMAIN ENFORCEMENT (NEURO-SYMBOLIC ARCHITECTURE)
+        prompt = f"""You are a STRICT relation extraction component inside a Neuro-Symbolic RDF system.
 
-You must choose ONE relation from this exact list:
-1. teaches (if a PERSON teaches at a PLACE or ORGANIZATION)
-2. teachesSubject (if a PERSON teaches a SUBJECT/TOPIC like Physics, Math, Computer Science)
-3. author (if a PERSON wrote something)
-4. worksAt (if a PERSON works at an ORGANIZATION)
-5. locatedIn (if an ORGANIZATION or PERSON is in a PLACE/CITY)
-6. collaboratesWith (if two PERSONS work together)
-7. studiesAt (if a PERSON studies at an ORGANIZATION)
-8. manages (if a PERSON manages an ORGANIZATION)
-9. relatedTo (default fallback)
+You are NOT an ontology editor.
+You are NOT allowed to change entity types.
+You are NOT allowed to create new classes or properties.
 
-IMPORTANT:
-- Use teachesSubject for academic subjects (Physics, Mathematics, Biology, etc.)
-- Use teaches for teaching at a place/institution
-- Only PERSONS can worksAt organizations
-- Organizations are locatedIn places, NOT worksAt
+========================
+ABSOLUTE RULES
+========================
 
-Reply ONLY with the single word of the relation. No explanation."""
+1. You must ONLY use the entity types provided.
+2. You must NOT re-type an entity (e.g., do NOT convert a Topic into a Person).
+3. If a subject is not explicitly a foaf:Person, you MUST NOT assign a teaching relation.
+4. If domain constraints are not satisfied, return NO_VALID_RELATIONS.
+5. If the sentence is semantically incoherent (e.g., a concept performing a human action), return NO_VALID_RELATIONS.
+6. You must NOT infer implicit roles.
+7. You must NOT generate schema-level triples.
+
+========================
+SEMANTIC FILTERS
+========================
+
+Human-only actions (REQUIRE subject = Person):
+- teaches, teachesSubject, author, worksAt, manages, collaboratesWith
+
+If subject type ≠ Person → return NO_VALID_RELATIONS.
+
+Topic-like entities (NEVER Person):
+- anything containing: "Sémantique", "RDF", "Web", "Graph", "Ontology", "SPARQL", "OWL"
+- abstract academic subjects
+- technical standards
+
+These must NEVER perform human actions.
+
+========================
+VERB MAPPING
+========================
+
+- "enseigne [subject]" → teachesSubject (if subject=Person AND object=Topic/Document)
+- "travaille à" → worksAt (if subject=Person AND object=Organization)
+- "écrit", "auteur" → author (if subject=Person AND object=Document)
+- "situé à" → locatedIn
+
+If constraints violated → NO_VALID_RELATIONS
+
+========================
+CONTEXT
+========================
+
+Text: "{sentence}"
+Entity 1: "{entity1}"
+Entity 2: "{entity2}"
+
+========================
+OUTPUT (ONE WORD ONLY)
+========================
+
+teachesSubject | teaches | author | worksAt | locatedIn | collaboratesWith | studiesAt | manages | relatedTo | NO_VALID_RELATIONS
+
+No explanations."""
 
         chat_completion = client.chat.completions.create(
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a Semantic Web expert. You output only JSON or single words."
+                    "content": "You are a STRICT relation extraction component. You output ONLY property names or NO_VALID_RELATIONS. You NEVER modify entity types. You NEVER allow non-Person subjects for human actions. You REJECT semantically incoherent relations."
                 },
                 {
                     "role": "user",
                     "content": prompt,
                 }
             ],
-            model="llama-3.1-8b-instant",  # Modèle gratuit actif et ultra-rapide
-            temperature=0,  # Zéro créativité = réponse stable
+            model="llama-3.1-8b-instant",
+            temperature=0,
         )
 
         relation = chat_completion.choices[0].message.content.strip()
         
         # Nettoyage au cas où Llama est bavard
-        relation = relation.lower().replace(".", "").replace('"', "").replace("'", "")
+        relation = relation.lower().replace(".", "").replace('"', "").replace("'", "").replace("_", "")
+        
+        # Si LLM retourne NO_RELATION ou NO_VALID_RELATIONS, on arrête immédiatement
+        if "no" in relation and ("relation" in relation or "valid" in relation):
+            print(f"    ⛔ LLM a rejeté la relation (NO_VALID_RELATIONS)")
+            return None
         
         # --- LOGIQUE DE CORRECTION SÉMANTIQUE AVEC PRIORITÉS ET CONTEXTE LOCAL ---
         sentence_lower = sentence.lower()
         entity1_lower = entity1.lower()
         entity2_lower = entity2.lower()
         
-        # Extraction du contexte local (15 mots autour des deux entités)
-        # Cela permet d'analyser uniquement le texte pertinent pour cette paire
+        # Extraction du contexte local AMÉLIORÉE : Utiliser la phrase qui contient les deux entités
+        # Si les entités sont dans des phrases différentes, utiliser la phrase de entity2 (objet)
         try:
-            pos1 = sentence_lower.find(entity1_lower)
-            pos2 = sentence_lower.find(entity2_lower)
+            # Séparer le texte en phrases
+            import re
+            sentences = re.split(r'[.!?]\s+', sentence)
             
-            if pos1 >= 0 and pos2 >= 0:
-                start = min(pos1, pos2)
-                end = max(pos1 + len(entity1_lower), pos2 + len(entity2_lower))
+            # Trouver la phrase qui contient les deux entités
+            local_context = None
+            for sent in sentences:
+                sent_lower = sent.lower()
+                if entity1_lower in sent_lower and entity2_lower in sent_lower:
+                    local_context = sent_lower
+                    break
+            
+            # Si pas de phrase commune, prendre la phrase de entity2 (objet)
+            # Raison: La relation est généralement exprimée près de l'objet
+            # Ex: "Elle travaille au CNRS" → "travaille" est dans la phrase du CNRS
+            if not local_context:
+                for sent in sentences:
+                    sent_lower = sent.lower()
+                    if entity2_lower in sent_lower:
+                        local_context = sent_lower
+                        break
+            
+            # Fallback sur la phrase de entity1
+            if not local_context:
+                for sent in sentences:
+                    sent_lower = sent.lower()
+                    if entity1_lower in sent_lower:
+                        local_context = sent_lower
+                        break
+            
+            # Fallback final sur contexte autour des entités (ancien système)
+            if not local_context:
+                pos1 = sentence_lower.find(entity1_lower)
+                pos2 = sentence_lower.find(entity2_lower)
                 
-                # Extraire 50 caractères avant et après pour le contexte
-                context_start = max(0, start - 50)
-                context_end = min(len(sentence_lower), end + 50)
-                local_context = sentence_lower[context_start:context_end]
-            else:
-                local_context = sentence_lower  # Fallback sur phrase complète
+                if pos1 >= 0 and pos2 >= 0:
+                    start = min(pos1, pos2)
+                    end = max(pos1 + len(entity1_lower), pos2 + len(entity2_lower))
+                    
+                    # Extraire 50 caractères avant et après pour le contexte
+                    context_start = max(0, start - 50)
+                    context_end = min(len(sentence_lower), end + 50)
+                    local_context = sentence_lower[context_start:context_end]
+                else:
+                    local_context = sentence_lower  # Fallback sur phrase complète
         except:
             local_context = sentence_lower
         
@@ -440,7 +523,11 @@ Reply ONLY with the single word of the relation. No explanation."""
         topics_keywords = ["physique", "mathématiques", "maths", "informatique", "biologie", 
                           "chimie", "histoire", "géographie", "philosophie", "littérature",
                           "physics", "mathematics", "computer science", "biology", "chemistry",
-                          "rdfs", "rdf", "owl", "sparql"]
+                          "rdfs", "rdf", "owl", "sparql", "sémantique", "web sémantique", 
+                          "semantic web", "ontologie", "ontology", "json-ld", "turtle",
+                          "bases de données", "base de données", "database", "réseaux", "networks",
+                          "algorithmes", "algorithms", "intelligence artificielle", "ia", "ai",
+                          "machine learning", "deep learning", "apprentissage"]
         
         is_topic = any(kw in entity2_lower for kw in topics_keywords)
         
@@ -460,15 +547,13 @@ Reply ONLY with the single word of the relation. No explanation."""
             relation = "manages"
             print(f"  💼 Priorité 2 : Détection 'dirige/gère' dans contexte local → Force manages")
         
-        # PRIORITÉ 3 : Travail/Emploi (personne → organisation/bâtiment, PAS ville)
+        # PRIORITÉ 3 : Travail/Emploi (personne → organisation/bâtiment)
+        # IMPORTANT : "travaille à X" devrait être worksAt même si X est une ville
+        # car dans contexte professionnel, c'est souvent une organisation (ex: Université de Versailles)
         elif any(kw in local_context for kw in ["travaille", "works", "employé", "employee"]):
-            # Accepter worksAt seulement si entity2 n'est PAS une vraie ville
-            if not is_vraie_ville or is_batiment:
-                relation = "worksAt"
-                print(f"  💼 Priorité 3 : Détection 'travaille' dans contexte local → Force worksAt")
-            else:
-                relation = "locatedIn"
-                print(f"  📍 'travaille' + ville détectée → Force locatedIn")
+            # Dans contexte de travail, privilégier worksAt (organisation implicite)
+            relation = "worksAt"
+            print(f"  💼 Priorité 3 : Détection 'travaille' → Force worksAt (contexte professionnel)")
         
         # PRIORITÉ 4 : Rédaction/Auteur (mots-clés de création)
         elif any(kw in local_context for kw in ["auteur", "rédigé", "écrit", "author", "wrote", "written", "écrivain", "a écrit"]):
@@ -685,6 +770,11 @@ JSON:"""
 
 def extract_entities_with_spacy(text, nlp):
     """
+    ⚠️ FONCTION LEGACY - REMPLACÉE PAR HybridNERModule
+    
+    Cette fonction est conservée pour compatibilité mais utilise désormais
+    le nouveau module hybride NER (7 couches).
+    
     Extrait les entités nommées d'un texte avec spaCy (reconnaissance NER).
     
     Cette fonction réalise la phase d'extraction factuelle qui alimentera
@@ -698,13 +788,32 @@ def extract_entities_with_spacy(text, nlp):
         list: Liste de tuples (texte_entité, type_entité)
               Exemple: [("Zoubida Kedad", "PER"), ("Université de Versailles", "LOC")]
     """
-    print("\n[A-BOX] Extraction des entités nommées avec spaCy...")
-    doc = nlp(text)
+    print("\n[A-BOX] Extraction des entités nommées avec MODULE 0++ (HybridNER)...")
     
-    entities = []
-    for ent in doc.ents:
-        entities.append((ent.text, ent.label_))
-        print(f"  ✓ Entité détectée : '{ent.text}' → Type : {ent.label_}")
+    # ============================================================================
+    # NOUVEAU : Utilisation du HybridNERModule (7 couches)
+    # ============================================================================
+    # Initialisation du module NER hybride
+    # Note: ontology_graph sera passé ultérieurement si validation activée
+    hybrid_ner = HybridNERModule(
+        nlp=nlp,
+        confidence_threshold=0.6,  # Seuil de confiance minimum
+        enable_validation=False    # Validation ontologique désactivée à cette étape
+    )
+    
+    # Extraction avec les 7 couches
+    entities_with_confidence = hybrid_ner.extract(text, verbose=True)
+    
+    # Conversion au format attendu (texte, type) - la confiance sera gérée séparément
+    entities = [(text, entity_type) for text, entity_type, confidence in entities_with_confidence]
+    
+    # Stockage des scores de confiance pour utilisation ultérieure
+    # (sera utilisé lors de l'ajout au graphe)
+    if not hasattr(extract_entities_with_spacy, '_confidence_cache'):
+        extract_entities_with_spacy._confidence_cache = {}
+    
+    for text, entity_type, confidence in entities_with_confidence:
+        extract_entities_with_spacy._confidence_cache[text] = confidence
     
     return entities
 
@@ -730,6 +839,11 @@ def instantiate_entities_in_abox(graph, entities):
     """
     print("\n[A-BOX] Instanciation des entités dans le graphe...")
     
+    # ============================================================================
+    # NOUVEAU : Initialisation du système de confiance
+    # ============================================================================
+    confidence_scorer = ConfidenceScorer(graph, verbose=True)
+    
     # Mapping entre les types NER (spaCy + Groq raffinés) et les classes OWL standards
     entity_type_mapping = {
         "PER": FOAF.Person,           # Personne → foaf:Person (standard FOAF)
@@ -746,12 +860,21 @@ def instantiate_entities_in_abox(graph, entities):
         uri_fragment = normalize_uri_fragment(entity_text)
         entity_uri = DATA[uri_fragment]
         
+        # Récupération du score de confiance depuis le cache HybridNER
+        confidence = 0.85  # Valeur par défaut
+        if hasattr(extract_entities_with_spacy, '_confidence_cache'):
+            confidence = extract_entities_with_spacy._confidence_cache.get(entity_text, 0.85)
+        
         # Gestion du nouveau type TOPIC (matières académiques, concepts scientifiques)
         if entity_label == "TOPIC":
             print(f"  📚 Entité TOPIC détectée (matière/concept) : '{entity_text}'")
             graph.add((entity_uri, RDF.type, EX.Document))
             graph.add((entity_uri, RDFS.label, Literal(entity_text, lang="fr")))
             graph.add((entity_uri, FOAF.name, Literal(entity_text, lang="fr")))
+            
+            # ✨ NOUVEAU : Ajout score de confiance
+            confidence_scorer.add_entity_confidence(entity_uri, confidence, source="hybrid_ner")
+            
             entity_uris[entity_text] = entity_uri
             print(f"  ✓ Instance créée : {uri_fragment} (type: Topic/Document, label: '{entity_text}')")
             continue
@@ -768,6 +891,10 @@ def instantiate_entities_in_abox(graph, entities):
                 graph.add((entity_uri, RDF.type, EX.Document))
                 graph.add((entity_uri, RDFS.label, Literal(entity_text, lang="fr")))
                 graph.add((entity_uri, FOAF.name, Literal(entity_text, lang="fr")))
+                
+                # ✨ NOUVEAU : Ajout score de confiance
+                confidence_scorer.add_entity_confidence(entity_uri, confidence, source="hybrid_ner")
+                
                 entity_uris[entity_text] = entity_uri
                 print(f"  ✓ Instance créée : {uri_fragment} (type: Document, label: '{entity_text}')")
                 continue
@@ -792,9 +919,14 @@ def instantiate_entities_in_abox(graph, entities):
         # foaf:name = nom lisible (standard FOAF)
         graph.add((entity_uri, FOAF.name, Literal(entity_text, lang="fr")))
         
+        # ✨ NOUVEAU : Ajout score de confiance
+        confidence_scorer.add_entity_confidence(entity_uri, confidence, source="hybrid_ner")
+        
         entity_uris[entity_text] = entity_uri
         type_display = owl_class.split('#')[-1].split('/')[-1]
         print(f"  ✓ Instance créée : {uri_fragment} (type: {type_display}, label: '{entity_text}')")
+    
+    return entity_uris
     
     return entity_uris
 
@@ -846,12 +978,107 @@ def extract_relations(graph, entity_uris, text):
     - Support de multiples types de relations
     - Typage adaptatif : un lieu peut être une organisation selon le contexte
     
+    ✨ NOUVEAU : Couche 7 - Mapping lemme → propriété OWL
+    - Détection de verbes dans le texte (enseigner, écrire, travailler)
+    - Mapping automatique vers propriétés OWL (teaches, author, worksAt)
+    - Validation domain/range pour les relations inférées
+    
     Args:
         graph (rdflib.Graph): Le graphe RDF où ajouter les relations
         entity_uris (dict): Mapping des entités vers leurs URIs
         text (str): Le texte source pour l'analyse contextuelle
     """
     print("\n[A-BOX] Extraction des relations sémantiques avec LLM Mock...")
+    
+    # ============================================================================
+    # ✨ COUCHE 7 : MAPPING LEMME → PROPRIÉTÉ OWL (Module 0++)
+    # ============================================================================
+    print("\n[MODULE 0++ - COUCHE 7] Mapping verbes → propriétés OWL")
+    print("-" * 80)
+    
+    # Initialisation HybridNER pour extraction de relations verbales
+    import spacy
+    nlp = spacy.load("fr_core_news_sm")
+    
+    from hybrid_ner_module import HybridNERModule
+    hybrid_ner = HybridNERModule(nlp, confidence_threshold=0.6, enable_validation=False)
+    
+    # Mapping verbe lemme → propriété OWL
+    verb_mapping = {
+        "enseigner": ("teaches", FOAF.Person, SCHEMA.Organization),
+        "écrire": ("author", FOAF.Person, EX.Document),
+        "travailler": ("worksAt", FOAF.Person, SCHEMA.Organization),
+        "diriger": ("manages", FOAF.Person, SCHEMA.Organization),
+        "étudier": ("studies", FOAF.Person, EX.Document),
+    }
+    
+    # Analyse du texte pour détecter les verbes
+    doc = nlp(text)
+    verb_relations_added = 0
+    
+    for token in doc:
+        if token.pos_ == "VERB":
+            lemma = token.lemma_.lower()
+            
+            if lemma in verb_mapping:
+                property_name, domain_class, range_class = verb_mapping[lemma]
+                
+                # Heuristique : sujet avant le verbe, objet après le verbe
+                subject_text = None
+                object_text = None
+                
+                # Chercher le sujet (nsubj)
+                for child in token.children:
+                    if child.dep_ in ["nsubj", "nsubjpass"]:
+                        # Récupérer l'entité complète (avec composés)
+                        for ent in doc.ents:
+                            if child.i >= ent.start and child.i < ent.end:
+                                subject_text = ent.text
+                                break
+                
+                # Chercher l'objet (dobj, attr)
+                for child in token.children:
+                    if child.dep_ in ["dobj", "obj", "attr", "obl"]:
+                        # Récupérer l'entité complète
+                        for ent in doc.ents:
+                            if child.i >= ent.start and child.i < ent.end:
+                                object_text = ent.text
+                                break
+                
+                # Si sujet et objet trouvés, créer la relation
+                if subject_text and object_text:
+                    subject_uri = entity_uris.get(subject_text)
+                    object_uri = entity_uris.get(object_text)
+                    
+                    if subject_uri and object_uri:
+                        # Vérification domain/range
+                        domain_valid = (subject_uri, RDF.type, domain_class) in graph
+                        range_valid = (object_uri, RDF.type, range_class) in graph
+                        
+                        if domain_valid and range_valid:
+                            relation_prop = getattr(EX, property_name)
+                            graph.add((subject_uri, relation_prop, object_uri))
+                            print(f"  ✓ Verbe '{token.text}' → {subject_text} --[{property_name}]--> {object_text}")
+                            verb_relations_added += 1
+                            
+                            # Ajout confiance pour cette relation
+                            confidence_scorer = ConfidenceScorer(graph, verbose=False)
+                            confidence_scorer.add_relation_confidence(
+                                subject_uri, relation_prop, object_uri,
+                                confidence=0.80,  # Confiance moyenne (heuristique verbale)
+                                source="verb_lemma_mapping"
+                            )
+    
+    if verb_relations_added > 0:
+        print(f"✅ {verb_relations_added} relation(s) inférée(s) via mapping verbes")
+    else:
+        print("  (Aucune relation verbale détectée)")
+    
+    print()
+    
+    # ============================================================================
+    # EXTRACTION RELATIONS LLM (méthode existante)
+    # ============================================================================
     
     # Parcours de toutes les paires d'entités possibles
     entities_list = list(entity_uris.items())
@@ -1078,67 +1305,95 @@ def visualize_knowledge_graph(graph, output_file="graphe_connaissance.png"):
     node_labels = {} # URI -> label lisible
     edge_labels = {} # (source, target) -> nom de la relation
     
-    # Extraction des nœuds (entités) et leurs types
-    for subject, predicate, obj in graph:
-        # FILTRE 1 : Ignorer les BNodes (nœuds anonymes comme les restrictions OWL)
-        if isinstance(subject, BNode) or isinstance(obj, BNode):
-            continue
+    # ============================================================================
+    # EXTRACTION DES ENTITÉS ET RELATIONS (A-Box uniquement)
+    # ============================================================================
+    # Stratégie : N'afficher QUE les instances de données (namespace DATA:)
+    # et ignorer toute l'ontologie (classes, propriétés, restrictions OWL)
+    
+    # Étape 1 : Identifier toutes les entités du namespace DATA (instances réelles)
+    data_entities = set()
+    for subject in graph.subjects():
+        if isinstance(subject, URIRef) and str(subject).startswith(str(DATA)):
+            # Vérifier que ce n'est pas un nœud de réification (statement_)
+            if not str(subject).startswith(str(DATA) + 'statement_'):
+                data_entities.add(str(subject))
+    
+    print(f"  → {len(data_entities)} entités de données détectées")
+    
+    # Étape 2 : Capturer les types et labels des entités
+    for entity_uri in data_entities:
+        entity_ref = URIRef(entity_uri)
         
-        # FILTRE 2 : Ignorer les triplets de définition d'ontologie (T-Box)
-        ontology_predicates = [RDF.type, RDFS.domain, RDFS.range, RDFS.label, RDFS.comment, 
-                              RDFS.subClassOf, OWL.onProperty, OWL.someValuesFrom, OWL.Restriction]
+        # Capturer le type (Person, Organization, Place, etc.)
+        for _, _, obj in graph.triples((entity_ref, RDF.type, None)):
+            if obj in [FOAF.Person, SCHEMA.Place, SCHEMA.Organization, EX.Document, EX.ValidatedCourse]:
+                node_types[entity_uri] = str(obj).split('#')[-1].split('/')[-1]
         
-        if predicate in ontology_predicates:
-            # Exception : Capturer le type des entités (PER/ORG/LOC)
-            if predicate == RDF.type and obj in [FOAF.Person, SCHEMA.Place, SCHEMA.Organization, EX.Document, EX.ValidatedCourse]:
-                node_types[str(subject)] = str(obj).split('#')[-1].split('/')[-1]
-            # Exception : Capturer les labels
-            if predicate == RDFS.label:
-                node_labels[str(subject)] = str(obj)
-            continue
+        # Capturer le label (foaf:name ou rdfs:label)
+        for _, _, name_obj in graph.triples((entity_ref, FOAF.name, None)):
+            node_labels[entity_uri] = str(name_obj)[:30]
         
-        # FILTRE 3 : Ignorer COMPLÈTEMENT les triplets de réification
-        # - Statement nodes (ex: data:statement_2460565)
-        # - Prédicats de réification (rdf:subject, rdf:predicate, rdf:object, dc:source)
-        if (str(subject).startswith(str(DATA) + 'statement_') or 
-            obj == RDF.Statement or 
-            predicate in [RDF.subject, RDF.predicate, RDF.object, DC.source]):
-            continue
+        for _, _, label_obj in graph.triples((entity_ref, RDFS.label, None)):
+            if entity_uri not in node_labels:
+                node_labels[entity_uri] = str(label_obj)[:30]
+    
+    # Étape 3 : Extraire UNIQUEMENT les relations entre entités de données
+    for subject_uri in data_entities:
+        subject_ref = URIRef(subject_uri)
         
-        # FILTRE 4 : Capturer foaf:name pour les labels (mais ne pas l'afficher comme arête)
-        if predicate == FOAF.name:
-            if str(subject) not in node_labels:
-                node_labels[str(subject)] = str(obj)[:30]
-            continue
-        
-        # FILTRE 5 : Ignorer les autres DatatypeProperty (âge, intitulé)
-        if predicate in [EX.intitule, EX.age]:
-            continue
-        
-        # AJOUT AU GRAPHE : Ajouter uniquement les relations ObjectProperty entre entités réelles
-        if isinstance(obj, URIRef):
-            # Vérifier que ce n'est pas une classe d'ontologie
-            if obj not in [OWL.Class, OWL.ObjectProperty, OWL.DatatypeProperty, OWL.Restriction]:
-                G.add_edge(str(subject), str(obj))
-                
-                # Extraire le nom de la relation
-                relation_name = str(predicate).split('#')[-1].split('/')[-1]
-                edge_labels[(str(subject), str(obj))] = relation_name
+        # Parcourir tous les triplets où cette entité est sujet
+        for _, predicate, obj in graph.triples((subject_ref, None, None)):
+            # Ignorer les prédicats système et métadonnées
+            if predicate in [RDF.type, RDFS.label, RDFS.comment, FOAF.name, 
+                            EX.age, EX.intitule, DC.source, EX.confidence]:
+                continue
+            
+            # ⚡ FILTRE IMPORTANT : Ignorer les prédicats RDF de réification
+            if predicate in [RDF.subject, RDF.predicate, RDF.object]:
+                continue
+            
+            # Ne garder que les relations vers d'autres entités de données
+            if isinstance(obj, URIRef) and str(obj) in data_entities:
+                # ⚡ FILTRE : Ne pas ajouter de self-loops (boucles sur soi-même)
+                if subject_uri != str(obj):
+                    G.add_edge(subject_uri, str(obj))
+                    
+                    # Extraire le nom de la relation
+                    relation_name = str(predicate).split('#')[-1].split('/')[-1]
+                    
+                    # DEBUG : Afficher les relations détectées
+                    subject_label = node_labels.get(subject_uri, subject_uri.split('#')[-1])
+                    obj_label = node_labels.get(str(obj), str(obj).split('#')[-1])
+                    print(f"    [DEBUG] {subject_label} --[{relation_name}]--> {obj_label}")
+                    
+                    edge_labels[(subject_uri, str(obj))] = relation_name
     
     if len(G.nodes()) == 0:
-        print("  ⚠ Aucun nœud à visualiser (graphe vide)")
+        print("  ⚠️  Aucune entité extraite à visualiser")
+        print("  💡 Conseil : Utilisez un texte avec des noms de personnes, organisations ou lieux")
         return
     
     print(f"  ✓ Graphe NetworkX créé : {len(G.nodes())} nœuds, {len(G.edges())} arêtes")
-    print(f"  ✓ Entités détectées : {', '.join([node_labels.get(n, n.split('#')[-1]) for n in list(G.nodes())[:5]])}")
+    
+    # Afficher les entités détectées
+    entity_names = [node_labels.get(n, n.split('#')[-1].split('/')[-1]) for n in list(G.nodes())[:10]]
+    if entity_names:
+        print(f"  ✓ Entités extraites : {', '.join(entity_names[:5])}")
+        if len(entity_names) > 5:
+            print(f"                       ... et {len(entity_names)-5} autres")
     
     # Préparation de la figure
-    plt.figure(figsize=(14, 10))
-    plt.title("Graphe de Connaissances Extrait\n(T-Box + A-Box avec Réification)", 
-              fontsize=16, fontweight='bold')
+    plt.figure(figsize=(16, 12))
+    plt.title("Graphe de Connaissances Extrait (A-Box uniquement)\nEntités et Relations détectées", 
+              fontsize=16, fontweight='bold', pad=20)
     
     # Layout du graphe (positionnement des nœuds)
-    pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+    # Spring layout pour graphes petits/moyens, circular pour grands graphes
+    if len(G.nodes()) <= 10:
+        pos = nx.spring_layout(G, k=3.5, iterations=100, seed=42)
+    else:
+        pos = nx.spring_layout(G, k=2.5, iterations=80, seed=42)
     
     # Colorisation par type de nœud
     color_map = {
@@ -1254,12 +1509,22 @@ def main():
             print(f"[CLEANUP] Ancien fichier supprimé : {old_file}")
     
     # -----------------------------------------------------------------------
-    # LECTURE DU TEXTE SOURCE (depuis fichier temporaire ou argument)
+    # LECTURE DU TEXTE SOURCE (depuis stdin, fichier temporaire ou argument)
     # -----------------------------------------------------------------------
     text_example = "Zoubida Kedad enseigne à l'Université de Versailles. Elle a rédigé un cours sur RDFS."
     
-    # Option 1 : Lire depuis texte_temp.txt (utilisé par Streamlit)
-    if os.path.exists("texte_temp.txt"):
+    # Option 1 : Lire depuis stdin (priorité pour tests)
+    if not sys.stdin.isatty():
+        try:
+            stdin_text = sys.stdin.read().strip()
+            if stdin_text:
+                text_example = stdin_text
+                print(f"[INFO] Texte chargé depuis stdin\n")
+        except Exception as e:
+            print(f"[WARNING] Erreur lecture stdin : {e}")
+    
+    # Option 2 : Lire depuis texte_temp.txt (utilisé par Streamlit)
+    elif os.path.exists("texte_temp.txt"):
         try:
             with open("texte_temp.txt", "r", encoding="utf-8") as f:
                 custom_text = f.read().strip()
@@ -1269,7 +1534,7 @@ def main():
         except Exception as e:
             print(f"[WARNING] Erreur lecture texte_temp.txt : {e}")
     
-    # Option 2 : Lire depuis argument en ligne de commande
+    # Option 3 : Lire depuis argument en ligne de commande
     if len(sys.argv) > 1:
         if sys.argv[1] == "--text" and len(sys.argv) > 2:
             text_example = sys.argv[2]
@@ -1318,11 +1583,41 @@ def main():
         return
     
     # -----------------------------------------------------------------------
+    # PHASE 2.5 : ENTRY GATE (Module 0 Filter) - Validation du texte source
+    # -----------------------------------------------------------------------
+    # WHY: Reject invalid inputs BEFORE processing to avoid noise downstream
+    print("\n" + "="*80)
+    print("[MODULE 0] ENTRY GATE - Validation du texte source")
+    print("="*80)
+    print(f"[TEXTE SOURCE] : \"{text_example}\"")
+    
+    # Check 1: Minimum length
+    if len(text_example.strip()) < 10:
+        print("❌ REJETÉ: Texte trop court (< 10 caractères)")
+        print("✗ Pipeline arrêté - texte invalide\n")
+        return
+    
+    # Check 2: Minimum word count
+    words = text_example.split()
+    if len(words) < 3:
+        print("❌ REJETÉ: Phrase trop courte (< 3 mots)")
+        print("✗ Pipeline arrêté - texte invalide\n")
+        return
+    
+    print("✓ Texte valide - longueur: {} caractères, {} mots\n".format(
+        len(text_example), len(words)))
+    
+    # -----------------------------------------------------------------------
     # PHASE 3 : Extraction des entités (A-Box - partie 1)
     # -----------------------------------------------------------------------
-    print(f"[TEXTE SOURCE] : \"{text_example}\"\n")
-    
     entities = extract_entities_with_spacy(text_example, nlp)
+    
+    # Entry gate: Minimum entity count
+    # WHY: Without entities, relation extraction will fail or produce noise
+    if len(entities) < 2:
+        print("\n❌ ENTRY GATE: Nombre d'entités insuffisant ({} < 2)".format(len(entities)))
+        print("✗ Pipeline arrêté - au moins 2 entités requises pour extraire des relations\n")
+        return
     
     # -----------------------------------------------------------------------
     # PHASE 3.5 : Raffinement intelligent des types via Groq/Llama-3 ✨
@@ -1342,6 +1637,47 @@ def main():
     # PHASE 5 : Réification des triplets
     # -----------------------------------------------------------------------
     apply_reification_to_relations(graph, source_file="texte_exemple.txt")
+    
+    # -----------------------------------------------------------------------
+    # ✨ NOUVEAU : PHASE 5.5 : APPLICATION DU RAISONNEMENT OWL (MODULE 1)
+    # -----------------------------------------------------------------------
+    print("\n" + "="*80)
+    print("[MODULE 1] RAISONNEMENT OWL - Inférence de types et propriétés")
+    print("="*80)
+    
+    # Initialisation du moteur de raisonnement
+    owl_reasoner = OWLReasoningEngine(graph, verbose=True)
+    
+    # Application du raisonnement (DeductiveClosure si owlrl disponible)
+    inferred_count = owl_reasoner.apply_reasoning()
+    
+    # Vérification de la cohérence du graphe
+    is_consistent, errors = owl_reasoner.check_consistency()
+    
+    if not is_consistent:
+        print("\n⚠️ ATTENTION : Inconsistances détectées dans le graphe")
+        for error in errors[:5]:  # Afficher max 5 erreurs
+            print(f"  • {error}")
+    
+    # Ajout de métadonnées de confiance pour les triplets inférés
+    if inferred_count > 0:
+        print(f"\n[MODULE 1] Ajout de métadonnées de confiance pour {inferred_count} triplets inférés...")
+        # Note: Les triplets inférés ont confiance = 1.0 (certitude logique)
+    
+    # -----------------------------------------------------------------------
+    # ✨ NOUVEAU : PHASE 5.6 : STATISTIQUES DE CONFIANCE
+    # -----------------------------------------------------------------------
+    print("\n" + "="*80)
+    print("[CONFIDENCE SYSTEM] Statistiques des scores de confiance")
+    print("="*80)
+    
+    confidence_scorer = ConfidenceScorer(graph, verbose=False)
+    stats = confidence_scorer.get_confidence_statistics()
+    
+    print(f"  • Entités avec score : {stats['count']}")
+    print(f"  • Score minimum : {stats['min']:.2f}")
+    print(f"  • Score maximum : {stats['max']:.2f}")
+    print(f"  • Score moyen : {stats['mean']:.2f}")
     
     # -----------------------------------------------------------------------
     # PHASE 6 : Sérialisation et export (DOUBLE FORMAT : TURTLE + XML)

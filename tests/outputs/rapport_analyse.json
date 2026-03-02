@@ -1,0 +1,194 @@
+{
+  "timestamp": "2026-03-02T04:00:04.009565",
+  "summary": {
+    "total": 10,
+    "passed": 9,
+    "failed": 1,
+    "success_rate": 90.0
+  },
+  "categories": {
+    "1_NER": {
+      "total": 3,
+      "passed": 3
+    },
+    "2_MAPPING": {
+      "total": 3,
+      "passed": 3
+    },
+    "3_DOMAIN_RANGE": {
+      "total": 2,
+      "passed": 1
+    },
+    "5_LLM": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "results": [
+    {
+      "test_id": "TEST_01",
+      "test_name": "Ambiguïté lexicale (Apple)",
+      "category": "1_NER",
+      "expected": "Apple doit être Organization",
+      "observations": [
+        "Entités : Apple (Organization), Apple (Statement), RDF (Statement), Apple (Thing), RDF (Thing), Apple (Person), RDF (Person), RDF (Document)",
+        "Relations : RDF --[confidence]--> 0.85, RDF --[extractionMethod]--> hybrid_ner, Apple --[confidence]--> 0.7, Apple --[extractionMethod]--> hybrid_ner",
+        "✅ Apple typé Organization"
+      ],
+      "metrics": {
+        "triples_total": 371,
+        "entities": 8,
+        "relations": 4
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_02",
+      "test_name": "Entités imbriquées",
+      "category": "1_NER",
+      "expected": "Université Paris-Saclay entité unique",
+      "observations": [
+        "Entités : Paris - Saclay (Place), Paris - Saclay (Statement), Université Paris-Saclay (Statement), Web Sémantique (Statement), Paris - Saclay (Thing), Université Paris-Saclay (Thing), Web Sémantique (Thing), Paris - Saclay (Person), Université Paris-Saclay (Person), Web Sémantique (Person), Université Paris-Saclay (Organization), Web Sémantique (Document)",
+        "Relations : Web Sémantique --[extractionMethod]--> hybrid_ner, Web Sémantique --[confidence]--> 0.9, Paris - Saclay --[extractionMethod]--> hybrid_ner, Université Paris-Saclay --[confidence]--> 0.9, Université Paris-Saclay --[extractionMethod]--> hybrid_ner",
+        "✅ Entité unique 'Université Paris-Saclay'"
+      ],
+      "metrics": {
+        "triples_total": 381,
+        "entities": 12,
+        "relations": 6
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_03",
+      "test_name": "Entité hors ontologie",
+      "category": "1_NER",
+      "expected": "Gestion entité inconnue",
+      "observations": [
+        "Entités : Dr. Xyzzq (Statement), Astro - Sémantique Quantique (Statement), Astro-Sémantique Quantique (Statement), Dr. Xyzzq (Thing), Astro - Sémantique Quantique (Thing), Astro-Sémantique Quantique (Thing), Dr. Xyzzq (Person), Astro - Sémantique Quantique (Person), Astro-Sémantique Quantique (Person), Astro - Sémantique Quantique (Document), Astro-Sémantique Quantique (Document)",
+        "Relations : Dr. Xyzzq --[teachesSubject]--> Astro - Sémantique Quantique, Astro-Sémantique Quantique --[confidence]--> 0.9, Astro-Sémantique Quantique --[extractionMethod]--> hybrid_ner, Astro - Sémantique Quantique --[confidence]--> 0.75, Dr. Xyzzq --[extractionMethod]--> hybrid_ner"
+      ],
+      "metrics": {
+        "triples_total": 382,
+        "entities": 11,
+        "relations": 8
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_04A",
+      "test_name": "Synonymes verbaux (donne)",
+      "category": "2_MAPPING",
+      "expected": "Relation teaches/teachesSubject",
+      "observations": [
+        "Entités : RDF (Document), RDF (Statement), Zoubida Kedad (Statement), RDF (Thing), Zoubida Kedad (Thing), RDF (Person), Zoubida Kedad (Person)",
+        "Relations : RDF --[confidence]--> 0.85, RDF --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[confidence]--> 0.9"
+      ],
+      "metrics": {
+        "triples_total": 370,
+        "entities": 7,
+        "relations": 4
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_04B",
+      "test_name": "Synonymes verbaux (enseigne)",
+      "category": "2_MAPPING",
+      "expected": "Relation teaches/teachesSubject",
+      "observations": [
+        "Entités : Zoubida Kedad (Statement), RDF (Statement), Zoubida Kedad (Thing), RDF (Thing), Zoubida Kedad (Person), RDF (Person), RDF (Document)",
+        "Relations : RDF --[confidence]--> 0.85, Zoubida Kedad --[teachesSubject]--> RDF, RDF --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[confidence]--> 0.9"
+      ],
+      "metrics": {
+        "triples_total": 371,
+        "entities": 7,
+        "relations": 5
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_05",
+      "test_name": "Verbe ambigu (travaille)",
+      "category": "2_MAPPING",
+      "expected": "Relation worksAt",
+      "observations": [
+        "Entités : statement_1242780 (Statement), Zoubida Kedad (Statement), Versailles (Statement), Zoubida Kedad (Thing), Versailles (Thing), Zoubida Kedad (Person), Versailles (Person), Versailles (Organization), Versailles (Place)",
+        "Relations : Versailles --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[worksAt]--> Versailles, Versailles --[confidence]--> 0.85, Zoubida Kedad --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[confidence]--> 0.9",
+        "✅ Relation worksAt détectée"
+      ],
+      "metrics": {
+        "triples_total": 384,
+        "entities": 9,
+        "relations": 5
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_06",
+      "test_name": "Violation Domain",
+      "category": "3_DOMAIN_RANGE",
+      "expected": "Rejet ou gestion violation",
+      "observations": [
+        "Entités : Web Sémantique (Document), Web Sémantique (Statement), Zoubida Kedad (Statement), Web Sémantique (Thing), Zoubida Kedad (Thing), Web Sémantique (Person), Zoubida Kedad (Person)",
+        "Relations : Web Sémantique --[extractionMethod]--> hybrid_ner, Web Sémantique --[confidence]--> 0.9, Zoubida Kedad --[confidence]--> 0.75, Zoubida Kedad --[extractionMethod]--> hybrid_ner",
+        "❌ Web Sémantique typé Person (violation)"
+      ],
+      "metrics": {
+        "triples_total": 370,
+        "entities": 7,
+        "relations": 4
+      },
+      "passed": false
+    },
+    {
+      "test_id": "TEST_07",
+      "test_name": "Violation Range",
+      "category": "3_DOMAIN_RANGE",
+      "expected": "Rejet ou adaptation",
+      "observations": [
+        "Entités : Versailles (Place), Versailles (Statement), Zoubida Kedad (Statement), Versailles (Thing), Zoubida Kedad (Thing), Versailles (Person), Zoubida Kedad (Person)",
+        "Relations : Versailles --[extractionMethod]--> hybrid_ner, Versailles --[confidence]--> 0.85, Zoubida Kedad --[extractionMethod]--> hybrid_ner, Zoubida Kedad --[confidence]--> 0.9"
+      ],
+      "metrics": {
+        "triples_total": 370,
+        "entities": 7,
+        "relations": 4
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_11",
+      "test_name": "Hallucination LLM",
+      "category": "5_LLM",
+      "expected": "Rejet relation absurde",
+      "observations": [
+        "Entités : RDF (Document), Web Sémantique (Document), RDF (Statement), Web Sémantique (Statement), RDF (Thing), Web Sémantique (Thing), RDF (Person), Web Sémantique (Person)",
+        "Relations : RDF --[confidence]--> 0.85, Web Sémantique --[extractionMethod]--> hybrid_ner, Web Sémantique --[confidence]--> 0.9, RDF --[extractionMethod]--> hybrid_ner",
+        "✅ Hallucination rejetée"
+      ],
+      "metrics": {
+        "triples_total": 371,
+        "entities": 8,
+        "relations": 4
+      },
+      "passed": true
+    },
+    {
+      "test_id": "TEST_12",
+      "test_name": "Texte bruité",
+      "category": "5_LLM",
+      "expected": "Extraction robuste au bruit",
+      "observations": [
+        "Entités : RDF (Document), RDF (Statement), Versailles (Statement), Zoubida (Statement), RDF (Thing), Versailles (Thing), Zoubida (Thing), RDF (Person), Versailles (Person), Zoubida (Person), Versailles (Place)",
+        "Relations : RDF --[confidence]--> 0.85, RDF --[extractionMethod]--> hybrid_ner, Versailles --[extractionMethod]--> hybrid_ner, Versailles --[confidence]--> 0.85, Zoubida --[confidence]--> 0.85"
+      ],
+      "metrics": {
+        "triples_total": 378,
+        "entities": 11,
+        "relations": 6
+      },
+      "passed": true
+    }
+  ]
+}

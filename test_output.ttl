@@ -1,0 +1,6 @@
+@prefix data: <http://example.org/master2/data#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+
+data:zoubida_kedad a foaf:Person ;
+    foaf:name "Zoubida Kedad" .
+

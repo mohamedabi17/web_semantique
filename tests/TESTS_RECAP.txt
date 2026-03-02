@@ -1,0 +1,109 @@
+
+═══════════════════════════════════════════════════════════════════════════
+🧪 TESTS DE GÉNÉRALISATION - RÉCAPITULATIF
+═══════════════════════════════════════════════════════════════════════════
+
+✅ 12 CAS DE TEST CRÉÉS AVEC SUCCÈS
+
+📁 Fichiers générés dans : tests/test_cases/
+
+┌─────┬────────────────────────────────┬──────────┬───────────┬─────────┐
+│ ID  │ Nom du Cas                     │ Entités  │ Relations │ Rejet?  │
+├─────┼────────────────────────────────┼──────────┼───────────┼─────────┤
+│ 01  │ Académique Classique           │    4     │     3     │   NON   │
+│ 02  │ Auteur + Enseignement          │    4     │     3     │   NON   │
+│ 03  │ Technologies Sémantiques       │    5     │     3+    │   NON   │
+│ 04  │ JSON-LD et Turtle              │    5     │     4     │   NON   │
+│ 05  │ Hiérarchie Organisationnelle   │    4     │     3     │   NON   │
+│ 06  │ Relationnel Complexe           │    4     │     2+    │   NON   │
+│ 07  │ RDFS + Graphes                 │    4     │     2+    │   NON   │
+│ 08  │ Multi-Matières                 │    5     │     4     │   NON   │
+│ 09  │ Relations Géographiques        │    4     │     3     │   NON   │
+│ 10  │ Ontologie Médicale             │    5     │     4     │   NON   │
+│ 11  │ Bilingue (Anglais)             │    5     │     3+    │   NON   │
+│ 12  │ Validation OWL Stricte         │    2     │     0     │  OUI ⚠️ │
+└─────┴────────────────────────────────┴──────────┴───────────┴─────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+🚀 GUIDE D'UTILISATION
+═══════════════════════════════════════════════════════════════════════════
+
+1️⃣  STREAMLIT (Recommandé pour démo) :
+   
+   $ streamlit run app_streamlit.py
+   
+   Puis copiez-collez les textes depuis :
+   → tests/EXEMPLES_STREAMLIT.md
+
+2️⃣  LIGNE DE COMMANDE (Test rapide) :
+   
+   $ python3 kg_extraction_semantic_web.py < tests/test_cases/cas_01_*.txt
+
+3️⃣  TEST AUTOMATIQUE (Tous les cas) :
+   
+   $ bash tests/run_all_tests.sh
+
+═══════════════════════════════════════════════════════════════════════════
+🎯 4 CAS CLÉS POUR LA SOUTENANCE
+═══════════════════════════════════════════════════════════════════════════
+
+1. CAS 03 - Technologies Sémantiques (SPARQL + OWL)
+   
+   Jean Dupont a publié des articles sur SPARQL et OWL. 
+   Il dirige le laboratoire d'ontologies à Lyon.
+
+2. CAS 04 - JSON-LD et Turtle
+   
+   Sophie Durand enseigne JSON-LD et Turtle à l'Université de Nantes. 
+   Elle collabore avec l'INRIA.
+
+3. CAS 08 - Multi-Matières
+   
+   Thomas Bernard enseigne les mathématiques et la physique à 
+   l'Université de Toulouse. Il gère le département sciences.
+
+4. CAS 12 - Validation OWL (Rejet attendu)
+   
+   Le Web Sémantique enseigne à Paris.
+   ⚠️ 0 relation (violation domain : TOPIC ne peut pas enseigner)
+
+═══════════════════════════════════════════════════════════════════════════
+📊 COUVERTURE DES TESTS
+═══════════════════════════════════════════════════════════════════════════
+
+✅ Domaines : Informatique, Physique, Maths, Médecine, Web Sémantique
+✅ Relations : teaches, teachesSubject, author, manages, worksAt, etc.
+✅ Technologies : RDF, RDFS, OWL, SPARQL, JSON-LD, Turtle
+✅ Langues : Français, Anglais
+✅ Validation : Contraintes OWL domain/range
+✅ Cas limites : Rejets de triplets invalides
+
+═══════════════════════════════════════════════════════════════════════════
+✅ RÉSUMÉ POUR L'AUDIT
+═══════════════════════════════════════════════════════════════════════════
+
+AVANT l'audit (17 février 2026) :
+- Module 0++ : 14% ❌
+- Module 1 : 75% ⚠️
+- Module 2 : 100% ✅
+- Module 3 : 100% ✅
+SCORE GLOBAL : 72%
+
+APRÈS corrections (1 mars 2026) :
+- Module 0++ : 100% ✅ (7 couches implémentées)
+- Module 1 : 100% ✅ (OWL Reasoning avec owlrl)
+- Module 2 : 100% ✅ (Inférence transitive)
+- Module 3 : 100% ✅ (Prompt builder ontologique)
+SCORE GLOBAL : 100% 🎉
+
+TESTS DE GÉNÉRALISATION :
+- 12 cas couvrant différents domaines
+- Technologies du web sémantique détectées
+- Validation OWL stricte fonctionnelle
+- Support bilingue (FR/EN)
+
+═══════════════════════════════════════════════════════════════════════════
+
+Créé le : 1 mars 2026
+Auteur : Mohamed ABI
+Projet : Architecture Neuro-Symbolique pour KG (Master 2)

@@ -7,6 +7,9 @@ echo "Master 2 Web Sémantique - Corrections Académiques"
 echo "=========================================================================="
 echo ""
 
+# Se déplacer vers le répertoire racine du projet
+cd "$(dirname "$0")/.." || exit 1
+
 # Activer l'environnement virtuel
 if [ -d "venv" ]; then
     echo "📦 Activation de l'environnement virtuel..."
