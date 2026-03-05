@@ -321,7 +321,8 @@ def normalize_uri_fragment(text):
 # 4. PRÉDICTION DE RELATIONS VIA LLM (SIMULATION)
 # ============================================================================
 
-def predict_relation_real_api(entity1: str, entity2: str, sentence: str) -> Optional[str]:
+def predict_relation_real_api(entity1: str, entity2: str, sentence: str,
+                              entity1_type: str = "UNK", entity2_type: str = "UNK") -> Optional[str]:
     """
     Utilise l'API GROQ (Gratuite et Ultra-Rapide).
     Modèle : Llama-3-8B (très performant pour l'extraction de relations).
@@ -407,8 +408,16 @@ CONTEXT
 ========================
 
 Text: "{sentence}"
-Entity 1: "{entity1}"
-Entity 2: "{entity2}"
+Entity 1: "{entity1}" (type: {entity1_type})
+Entity 2: "{entity2}" (type: {entity2_type})
+
+Admissible relations for ({entity1_type} → {entity2_type}):
+- PER → TOPIC  : teachesSubject, author, relatedTo
+- PER → ORG    : worksAt, manages, studiesAt, collaboratesWith, relatedTo
+- PER → LOC    : locatedIn, relatedTo
+- PER → PER    : collaboratesWith, relatedTo
+- ORG → LOC    : locatedIn, relatedTo
+(other combinations → relatedTo or NO_VALID_RELATIONS)
 
 ========================
 OUTPUT (ONE WORD ONLY)
@@ -435,8 +444,24 @@ No explanations."""
 
         relation = chat_completion.choices[0].message.content.strip()
         
-        # Nettoyage au cas où Llama est bavard
-        relation = relation.lower().replace(".", "").replace('"', "").replace("'", "").replace("_", "")
+        # Clean LLM output: strip punctuation but KEEP underscores (needed for
+        # camelCase property names like "teachesSubject" which use no underscores,
+        # but also safe to keep them for any variant the LLM may emit).
+        relation = relation.strip().replace(".", "").replace('"', "").replace("'", "")
+        # Normalise to camelCase canonical forms used by valid_relations
+        _llm_aliases = {
+            "teachessubject":   "teachesSubject",
+            "teaches_subject":  "teachesSubject",
+            "worksat":          "worksAt",
+            "works_at":         "worksAt",
+            "locatedin":        "locatedIn",
+            "located_in":       "locatedIn",
+            "collaborateswith":        "collaboratesWith",
+            "collaborates_with":       "collaboratesWith",
+            "studiesat":        "studiesAt",
+            "studies_at":       "studiesAt",
+        }
+        relation = _llm_aliases.get(relation.lower(), relation)
         
         # Si LLM retourne NO_RELATION ou NO_VALID_RELATIONS, on arrête immédiatement
         if "no" in relation and ("relation" in relation or "valid" in relation):
@@ -517,28 +542,53 @@ No explanations."""
         is_batiment = any(bat in entity2_lower for bat in batiments_institutions)
         
         # === PRIORITÉS BASÉES SUR LE CONTEXTE LOCAL (pas toute la phrase) ===
-        
-        # PRIORITÉ 0 : Enseignement d'une matière (si entity2 est un TOPIC)
-        # Détection : "enseigne" + entity2 semble être une matière ou détecté comme TOPIC par Groq
-        topics_keywords = ["physique", "mathématiques", "maths", "informatique", "biologie", 
+
+        # PRIORITÉ 0 : Enseignement — dispatch selon le type de entity2
+        # Primary source: NER-produced entity types passed as parameters.
+        # Keyword lists are used ONLY as fallback when type is UNK.
+        topics_keywords = ["physique", "mathématiques", "maths", "informatique", "biologie",
                           "chimie", "histoire", "géographie", "philosophie", "littérature",
                           "physics", "mathematics", "computer science", "biology", "chemistry",
-                          "rdfs", "rdf", "owl", "sparql", "sémantique", "web sémantique", 
+                          "rdfs", "rdf", "owl", "sparql", "sémantique", "web sémantique",
                           "semantic web", "ontologie", "ontology", "json-ld", "turtle",
                           "bases de données", "base de données", "database", "réseaux", "networks",
                           "algorithmes", "algorithms", "intelligence artificielle", "ia", "ai",
                           "machine learning", "deep learning", "apprentissage"]
-        
-        is_topic = any(kw in entity2_lower for kw in topics_keywords)
-        
-        if any(kw in local_context for kw in ["enseigne", "enseigné", "enseignant", "teach", "taught", "teaching"]) and is_topic:
+
+        org_keywords = ["université", "university", "institute", "institut", "laboratoire",
+                        "lab", "department", "département", "centre", "center", "school",
+                        "college", "école", "inria", "cnrs"]
+
+        # Type-first resolution (NER parameter > keyword heuristic)
+        if entity2_type == "TOPIC":
+            is_topic, is_org = True, False
+        elif entity2_type in ("ORG",):
+            is_topic, is_org = False, True
+        elif entity2_type in ("LOC",):
+            # LOC alone: keyword fallback distinguishes pure city from institution
+            is_topic = False
+            is_org   = any(kw in entity2_lower for kw in org_keywords)
+        else:
+            # UNK — fall back to keyword heuristics
+            is_topic = any(kw in entity2_lower for kw in topics_keywords)
+            is_org   = any(kw in entity2_lower for kw in org_keywords)
+
+        _teach_verbs = ["enseigne", "enseigné", "enseignant", "teach", "taught", "teaching"]
+        _teach_in_ctx = any(kw in local_context for kw in _teach_verbs)
+
+        if _teach_in_ctx and is_topic:
             relation = "teachesSubject"
-            print(f"  🎓 Priorité 0 : Détection 'enseigne' + matière '{entity2}' → Force teachesSubject (bypass validation)")
-        
-        # PRIORITÉ 1 : Enseignement (mots-clés pédagogiques) - TOUJOURS EN PREMIER
-        elif any(kw in local_context for kw in ["enseigne", "enseigné", "enseignant", "professeur", "teach", "professor", "taught", "teaching"]):
-            relation = "teaches"
-            print(f"  🎓 Priorité 1 : Détection 'enseigne/professeur' dans contexte local → Force teaches")
+            print(f"  🎓 Priorité 0a : 'enseigne' + matière '{entity2}' → teachesSubject")
+
+        elif _teach_in_ctx and is_org:
+            relation = "worksAt"
+            print(f"  🏫 Priorité 0b : 'enseigne' + organisation '{entity2}' → worksAt")
+
+        # PRIORITÉ 1 : Enseignement générique (type de entity2 inconnu)
+        elif any(kw in local_context for kw in ["enseigne", "enseigné", "enseignant", "professeur",
+                                                  "teach", "professor", "taught", "teaching"]):
+            relation = "teachesSubject"
+            print(f"  🎓 Priorité 1 : 'enseigne/professeur' → teachesSubject (défaut)")
         
         # PRIORITÉ 2 : Direction/Management (mots-clés de management)
         # IMPORTANT : Seulement si entity1 est une personne ET entity2 est une organisation
@@ -566,19 +616,30 @@ No explanations."""
                 relation = "locatedIn"
                 print(f"  📍 Priorité 4.5 : Détection 'situé/basé' dans contexte local → Force locatedIn")
         
-        # PRIORITÉ 5 : Localisation (si entity2 est une vraie ville)
+        # PRIORITÉ 5 : Localisation (si entity2 est une VRAIE ville — pas une institution)
+        # This fires even after Priority 0/1 because a bare city is never a
+        # teaching object: "Zoubida enseigne Versailles" makes no semantic sense.
         elif is_vraie_ville:
             ville_detectee = next((v for v in vraies_villes if v in entity2_lower), entity2)
             print(f"  📍 Priorité 5 : Détection ville '{ville_detectee}' → Force locatedIn")
             relation = "locatedIn"
+
+        # POST-OVERRIDE: bare city must always yield locatedIn regardless of verb
+        if is_vraie_ville and relation != "locatedIn":
+            relation = "locatedIn"
+            print(f"  📍 Post-override : ville seule → locatedIn (annule verbe d'enseignement)")
         
         # Mapping de sécurité pour les autres cas (détection dans la réponse LLM)
-        # IMPORTANT : Ne pas toucher à teachesSubject s'il a été forcé en Priorité 0
-        if relation != "teachesSubject":  # Protection contre écrasement
+        # IMPORTANT : Ne pas écraser teachesSubject ou worksAt fixés par les priorités 0a/0b
+        if relation not in ("teachesSubject", "worksAt"):  # Protection contre écrasement
             if "teachsubject" in relation.lower().replace(" ", "").replace("_", ""):
                 relation = "teachesSubject"
             elif "teach" in relation:
-                relation = "teaches"
+                # Dispatcher selon le type de entity2
+                if is_org:
+                    relation = "worksAt"
+                else:
+                    relation = "teachesSubject"
             elif "author" in relation or "wrote" in relation:
                 relation = "author"
             elif "work" in relation:
@@ -593,7 +654,7 @@ No explanations."""
                 relation = "manages"
         
         # Liste des relations valides
-        valid_relations = ["teaches", "teachesSubject", "author", "worksAt", "locatedIn", 
+        valid_relations = ["teachesSubject", "author", "worksAt", "locatedIn",
                           "collaboratesWith", "studiesAt", "manages", "relatedTo"]
         if relation not in valid_relations:
             relation = "relatedTo"
@@ -617,9 +678,26 @@ No explanations."""
                 print(f"  🔍 Fallback : Détection de lieu '{lieu}' → locatedIn")
                 return "locatedIn"
         
-        # Autres détections
+        # Autres détections — use entity2_type (NER) first, keyword fallback for UNK
         if "enseigne" in sentence_lower or "teach" in sentence_lower:
-            return "teaches"
+            if entity2_type == "ORG":
+                return "worksAt"
+            if entity2_type == "TOPIC":
+                return "teachesSubject"
+            # Type UNK → keyword fallback
+            _fallback_org_kw   = ["université", "university", "institut", "institute",
+                                   "laboratoire", "lab", "department", "département",
+                                   "centre", "center", "école", "school", "college",
+                                   "inria", "cnrs"]
+            _fallback_topic_kw = ["physique", "mathématiques", "maths", "informatique",
+                                   "sémantique", "rdf", "owl", "sparql", "ontologie",
+                                   "machine learning", "deep learning", "ia", "ai",
+                                   "réseaux", "algorithmes", "database", "databases"]
+            if any(kw in entity2_lower for kw in _fallback_org_kw):
+                return "worksAt"
+            if any(kw in entity2_lower for kw in _fallback_topic_kw):
+                return "teachesSubject"
+            return "teachesSubject"  # safest default
         if "rédigé" in sentence_lower or "écrit" in sentence_lower or "author" in sentence_lower:
             return "author"
         if "travaille" in sentence_lower or "works" in sentence_lower:
@@ -744,6 +822,11 @@ JSON:"""
                 
                 refined_type = type_mapping.get(new_type, original_type)
                 
+                # Safety guard: never let LLM downgrade a PER decided by NER
+                if original_type == "PER" and refined_type != "PER":
+                    print(f"  🛡️ Protégé : '{entity_text}' reste PER (LLM proposait {refined_type})")
+                    refined_type = "PER"
+
                 if refined_type != original_type:
                     print(f"  🔄 Raffinement : '{entity_text}' : {original_type} → {refined_type}")
                 else:
@@ -951,7 +1034,14 @@ def adapt_entity_type(graph, entity_uri, entity_text, required_type):
     current_types = list(graph.objects(entity_uri, RDF.type))
     
     # Si l'entité est un Place et qu'on a besoin d'Organization → ajouter Organization
-    if SCHEMA.Place in current_types and required_type == SCHEMA.Organization:
+    # GUARD: Only adapt if the entity name looks like an institution, NOT a bare city.
+    _inst_keywords = ["université", "university", "institute", "institut", "école",
+                      "school", "college", "laboratoire", "lab", "centre", "center",
+                      "department", "département", "inria", "cnrs", "mit", "stanford",
+                      "harvard", "palais", "élysée"]
+    _entity_lower = entity_text.lower()
+    _looks_like_institution = any(kw in _entity_lower for kw in _inst_keywords)
+    if SCHEMA.Place in current_types and required_type == SCHEMA.Organization and _looks_like_institution:
         graph.add((entity_uri, RDF.type, SCHEMA.Organization))
         print(f"    🔄 Typage adaptatif : {entity_text} est aussi une Organisation (contexte professionnel)")
         return True
@@ -1004,70 +1094,174 @@ def extract_relations(graph, entity_uris, text):
     hybrid_ner = HybridNERModule(nlp, confidence_threshold=0.6, enable_validation=False)
     
     # Mapping verbe lemme → propriété OWL
+    # Note: 'enseigner' handled separately below with type-aware dispatch.
+    #   • PER --[teachesSubject]--> TOPIC/Document  (direct object)
+    #   • PER --[worksAt]-->        ORG              (prepositional object)
     verb_mapping = {
-        "enseigner": ("teaches", FOAF.Person, SCHEMA.Organization),
-        "écrire": ("author", FOAF.Person, EX.Document),
+        "écrire":    ("author",   FOAF.Person, EX.Document),
         "travailler": ("worksAt", FOAF.Person, SCHEMA.Organization),
-        "diriger": ("manages", FOAF.Person, SCHEMA.Organization),
-        "étudier": ("studies", FOAF.Person, EX.Document),
+        "diriger":   ("manages",  FOAF.Person, SCHEMA.Organization),
+        "étudier":   ("studiesAt", FOAF.Person, EX.Document),
     }
-    
+
+    # Prepositions that introduce a workplace in French / English
+    _AT_PREPS = frozenset(["à", "au", "aux", "dans", "en", "at", "in"])
+
     # Analyse du texte pour détecter les verbes
     doc = nlp(text)
     verb_relations_added = 0
-    
+
     for token in doc:
         if token.pos_ == "VERB":
             lemma = token.lemma_.lower()
-            
-            if lemma in verb_mapping:
-                property_name, domain_class, range_class = verb_mapping[lemma]
-                
-                # Heuristique : sujet avant le verbe, objet après le verbe
+
+            # ================================================================
+            # TYPE-AWARE DISPATCH FOR 'enseigner' / 'teach'
+            # Rule:
+            #   PER --[teachesSubject]--> TOPIC/Document  (grammatical dobj)
+            #   PER --[worksAt]-->        ORG              (oblique / prep obj)
+            # ================================================================
+            if lemma in ("enseigner", "teach"):
+                # Find subject
                 subject_text = None
-                object_text = None
-                
-                # Chercher le sujet (nsubj)
                 for child in token.children:
-                    if child.dep_ in ["nsubj", "nsubjpass"]:
-                        # Récupérer l'entité complète (avec composés)
+                    if child.dep_ in ("nsubj", "nsubjpass"):
                         for ent in doc.ents:
                             if child.i >= ent.start and child.i < ent.end:
                                 subject_text = ent.text
                                 break
-                
-                # Chercher l'objet (dobj, attr)
+
+                if not subject_text:
+                    continue
+                subject_uri = entity_uris.get(subject_text)
+                if not subject_uri:
+                    continue
+                if (subject_uri, RDF.type, FOAF.Person) not in graph:
+                    continue
+
+                # Direct object → teachesSubject (TOPIC/Document)
                 for child in token.children:
-                    if child.dep_ in ["dobj", "obj", "attr", "obl"]:
-                        # Récupérer l'entité complète
+                    if child.dep_ in ("dobj", "obj", "attr"):
                         for ent in doc.ents:
                             if child.i >= ent.start and child.i < ent.end:
-                                object_text = ent.text
+                                obj_uri = entity_uris.get(ent.text)
+                                if obj_uri and (
+                                    (obj_uri, RDF.type, EX.Document) in graph or
+                                    (obj_uri, RDF.type, EX.Topic)    in graph
+                                ):
+                                    graph.add((subject_uri, EX.teachesSubject, obj_uri))
+                                    print(f"  ✓ enseigner (dobj) → {subject_text} --[teachesSubject]--> {ent.text}")
+                                    verb_relations_added += 1
+                                    ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                        subject_uri, EX.teachesSubject, obj_uri,
+                                        confidence=0.85, source="verb_lemma_mapping")
                                 break
-                
-                # Si sujet et objet trouvés, créer la relation
-                if subject_text and object_text:
-                    subject_uri = entity_uris.get(subject_text)
-                    object_uri = entity_uris.get(object_text)
-                    
-                    if subject_uri and object_uri:
-                        # Vérification domain/range
-                        domain_valid = (subject_uri, RDF.type, domain_class) in graph
-                        range_valid = (object_uri, RDF.type, range_class) in graph
-                        
-                        if domain_valid and range_valid:
-                            relation_prop = getattr(EX, property_name)
-                            graph.add((subject_uri, relation_prop, object_uri))
-                            print(f"  ✓ Verbe '{token.text}' → {subject_text} --[{property_name}]--> {object_text}")
+
+                # Oblique / prepositional object → worksAt (ORG)
+                for child in token.children:
+                    if child.dep_ in ("obl", "obl:mod", "obl:arg", "nmod", "prep"):
+                        for ent in doc.ents:
+                            if child.i >= ent.start and child.i < ent.end:
+                                obj_uri = entity_uris.get(ent.text)
+                                if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                    graph.add((subject_uri, EX.worksAt, obj_uri))
+                                    print(f"  ✓ enseigner (obl) → {subject_text} --[worksAt]--> {ent.text}")
+                                    verb_relations_added += 1
+                                    ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                        subject_uri, EX.worksAt, obj_uri,
+                                        confidence=0.85, source="verb_lemma_mapping")
+                                break
+                    # Also walk ADP → pobj (e.g. "à" → "Université de Versailles")
+                    if child.pos_ == "ADP" and child.lower_ in _AT_PREPS:
+                        for grandchild in child.children:
+                            if grandchild.dep_ in ("pobj", "obj", "nmod"):
+                                for ent in doc.ents:
+                                    if grandchild.i >= ent.start and grandchild.i < ent.end:
+                                        obj_uri = entity_uris.get(ent.text)
+                                        if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                            graph.add((subject_uri, EX.worksAt, obj_uri))
+                                            print(f"  ✓ enseigner (prep) → {subject_text} --[worksAt]--> {ent.text}")
+                                            verb_relations_added += 1
+                                            ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                                subject_uri, EX.worksAt, obj_uri,
+                                                confidence=0.85, source="verb_lemma_mapping")
+                                        break
+
+                # Positional fallback: dep parse missed the objects — scan by type
+                already_linked = set(graph.objects(subject_uri, EX.teachesSubject)) | \
+                                 set(graph.objects(subject_uri, EX.worksAt))
+                if not already_linked:
+                    verb_pos = token.i
+                    for ent_text, ent_uri in entity_uris.items():
+                        if ent_text == subject_text:
+                            continue
+                        ent_after = any(t.i > verb_pos for t in doc if t.text in ent_text.split())
+                        if not ent_after:
+                            continue
+                        if (ent_uri, RDF.type, EX.Document) in graph or \
+                           (ent_uri, RDF.type, EX.Topic) in graph:
+                            graph.add((subject_uri, EX.teachesSubject, ent_uri))
+                            print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[teachesSubject]--> {ent_text}")
                             verb_relations_added += 1
-                            
-                            # Ajout confiance pour cette relation
-                            confidence_scorer = ConfidenceScorer(graph, verbose=False)
-                            confidence_scorer.add_relation_confidence(
-                                subject_uri, relation_prop, object_uri,
-                                confidence=0.80,  # Confiance moyenne (heuristique verbale)
-                                source="verb_lemma_mapping"
-                            )
+                        elif (ent_uri, RDF.type, SCHEMA.Organization) in graph:
+                            graph.add((subject_uri, EX.worksAt, ent_uri))
+                            print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[worksAt]--> {ent_text}")
+                            verb_relations_added += 1
+                continue  # done with this enseigner token
+
+            # ================================================================
+            # Standard single-property dispatch for other verbs
+            # ================================================================
+            if lemma not in verb_mapping:
+                continue
+
+            property_name, domain_class, range_class = verb_mapping[lemma]
+
+            # Heuristique : sujet avant le verbe, objet après le verbe
+            subject_text = None
+            object_text = None
+
+            # Chercher le sujet (nsubj)
+            for child in token.children:
+                if child.dep_ in ["nsubj", "nsubjpass"]:
+                    # Récupérer l'entité complète (avec composés)
+                    for ent in doc.ents:
+                        if child.i >= ent.start and child.i < ent.end:
+                            subject_text = ent.text
+                            break
+
+            # Chercher l'objet (dobj, attr)
+            for child in token.children:
+                if child.dep_ in ["dobj", "obj", "attr", "obl"]:
+                    # Récupérer l'entité complète
+                    for ent in doc.ents:
+                        if child.i >= ent.start and child.i < ent.end:
+                            object_text = ent.text
+                            break
+
+            # Si sujet et objet trouvés, créer la relation
+            if subject_text and object_text:
+                subject_uri = entity_uris.get(subject_text)
+                object_uri = entity_uris.get(object_text)
+
+                if subject_uri and object_uri:
+                    # Vérification domain/range
+                    domain_valid = (subject_uri, RDF.type, domain_class) in graph
+                    range_valid = (object_uri, RDF.type, range_class) in graph
+
+                    if domain_valid and range_valid:
+                        relation_prop = getattr(EX, property_name)
+                        graph.add((subject_uri, relation_prop, object_uri))
+                        print(f"  ✓ Verbe '{token.text}' → {subject_text} --[{property_name}]--> {object_text}")
+                        verb_relations_added += 1
+
+                        # Ajout confiance pour cette relation
+                        confidence_scorer = ConfidenceScorer(graph, verbose=False)
+                        confidence_scorer.add_relation_confidence(
+                            subject_uri, relation_prop, object_uri,
+                            confidence=0.80,  # Confiance moyenne (heuristique verbale)
+                            source="verb_lemma_mapping"
+                        )
     
     if verb_relations_added > 0:
         print(f"✅ {verb_relations_added} relation(s) inférée(s) via mapping verbes")
@@ -1080,6 +1274,53 @@ def extract_relations(graph, entity_uris, text):
     # EXTRACTION RELATIONS LLM (méthode existante)
     # ============================================================================
     
+    # ── Static OWL-derived relation table ──────────────────────────────────────
+    # Defines which relation predicates are semantically admissible for each
+    # (entity1_type, entity2_type) pair.  The LLM is ONLY called when the pair
+    # has at least one admissible relation.  This avoids noise triples like
+    # TOPIC --[author]--> ORG  or  ORG --[worksAt]--> LOC.
+    RELATION_TABLE = {
+        ("PER", "TOPIC"):  ["teachesSubject", "author", "relatedTo"],
+        ("PER", "ORG"):    ["worksAt", "manages", "studiesAt", "collaboratesWith", "relatedTo"],
+        # PER→LOC includes worksAt: an institution may be NER-typed LOC and later
+        # promoted to ORG by adapt_entity_type (guarded against bare cities).
+        ("PER", "LOC"):    ["worksAt", "locatedIn", "relatedTo"],
+        ("PER", "PER"):    ["collaboratesWith", "relatedTo"],
+        ("ORG", "LOC"):    ["locatedIn", "relatedTo"],
+        ("ORG", "ORG"):    ["relatedTo"],
+        ("ORG", "PER"):    ["relatedTo"],
+        ("TOPIC", "TOPIC"):["relatedTo"],
+        ("TOPIC", "ORG"):  ["relatedTo"],
+        ("LOC", "LOC"):    ["locatedIn", "relatedTo"],
+        # UNK: type could not be resolved — allow all, priority logic will decide
+        ("PER", "UNK"):    ["teachesSubject", "author", "worksAt", "manages",
+                            "studiesAt", "collaboratesWith", "locatedIn", "relatedTo"],
+        ("UNK", "TOPIC"):  ["teachesSubject", "author", "relatedTo"],
+        ("UNK", "ORG"):    ["worksAt", "manages", "studiesAt", "relatedTo"],
+        ("UNK", "LOC"):    ["locatedIn", "relatedTo"],
+        ("UNK", "UNK"):    ["relatedTo"],
+    }
+
+    # Build a reverse map: entity_uri → NER type (PER/ORG/LOC/TOPIC/DOC)
+    _OWL_TO_NER = {
+        str(FOAF.Person):          "PER",
+        str(SCHEMA.Organization):  "ORG",
+        str(SCHEMA.Place):         "LOC",
+        str(EX.Document):          "TOPIC",
+    }
+    def _ner_type_of(uri):
+        for _, _, rdf_type in graph.triples((uri, RDF.type, None)):
+            ner = _OWL_TO_NER.get(str(rdf_type))
+            if ner:
+                return ner
+        return "UNK"
+
+    # Collect pairs already handled by Layer 7 (verb dispatch) to avoid duplication
+    _layer7_covered = set()
+    for prop in (EX.teachesSubject, EX.worksAt, EX.author, EX.manages, EX.studiesAt):
+        for s, _, o in graph.triples((None, prop, None)):
+            _layer7_covered.add((str(s), str(o)))
+
     # Parcours de toutes les paires d'entités possibles
     entities_list = list(entity_uris.items())
     
@@ -1087,12 +1328,41 @@ def extract_relations(graph, entity_uris, text):
         for j, (entity2_text, entity2_uri) in enumerate(entities_list):
             if i >= j:  # Éviter les doublons et auto-relations
                 continue
-            
-            # Utilisation de l'API Hugging Face RÉELLE pour prédire la relation ⭐
-            relation_type = predict_relation_real_api(entity1_text, entity2_text, text)
-            
+
+            # Skip pairs already covered by Layer 7 (dep-parse verb dispatch)
+            if (str(entity1_uri), str(entity2_uri)) in _layer7_covered or                (str(entity2_uri), str(entity1_uri)) in _layer7_covered:
+                print(f"  ⏭️  Paire déjà couverte par Couche 7 : {entity1_text} ↔ {entity2_text}")
+                continue
+
+            # Resolve NER types from the graph (authoritative source)
+            e1_type = _ner_type_of(entity1_uri)
+            e2_type = _ner_type_of(entity2_uri)
+
+            # Pre-filter: skip pairs with no admissible relation in the table
+            allowed_relations = RELATION_TABLE.get((e1_type, e2_type), [])
+            if not allowed_relations:
+                # Try reverse direction before giving up
+                allowed_relations = RELATION_TABLE.get((e2_type, e1_type), [])
+            if not allowed_relations:
+                print(f"  ⛔ Paire ignorée (aucune relation OWL admissible) : "
+                      f"{entity1_text}({e1_type}) ↔ {entity2_text}({e2_type})")
+                continue
+
+            # Utilisation de l'API Groq pour prédire la relation ⭐
+            relation_type = predict_relation_real_api(
+                entity1_text, entity2_text, text,
+                entity1_type=e1_type, entity2_type=e2_type
+            )
+
             if relation_type is None:
                 continue
+
+            # Post-call ontology guard: reject anything outside the admissible set.
+            # "relatedTo" is always a safe fallback so we allow it even if not in table.
+            if relation_type != "relatedTo" and relation_type not in allowed_relations:
+                print(f"  ⛔ LLM retourné '{relation_type}' n'est pas admissible pour "
+                      f"({e1_type}→{e2_type}). Forcé → relatedTo")
+                relation_type = "relatedTo"
             
             # Mapping des relations prédites vers les propriétés OWL avec contraintes flexibles
             # Note : teaches accepte Place OU Organization (université = organisation)
@@ -1113,22 +1383,35 @@ def extract_relations(graph, entity_uris, text):
             
             relation_prop, expected_domain, expected_range = relation_mapping[relation_type]
             
-            # BYPASS SPÉCIAL : Si teachesSubject détecté en Priorité 0, ajouter directement
-            # (car entity2 est un TOPIC détecté par Groq, pas encore typé dans le graphe)
+            # Fast-path domain/range check for type-exact relations.
+            # These have unambiguous OWL constraints — validate directly without adapt_entity_type.
             if relation_type == "teachesSubject":
-                # Vérifier que entity1 est bien une Person
                 domain_valid = (entity1_uri, RDF.type, FOAF.Person) in graph
-                # Vérifier que entity2 est un Document/TOPIC
-                range_valid = (entity2_uri, RDF.type, EX.Document) in graph
-                
+                range_valid  = (entity2_uri, RDF.type, EX.Document)  in graph
                 if domain_valid and range_valid:
                     graph.add((entity1_uri, relation_prop, entity2_uri))
-                    print(f"  ✓ Relation LLM : {entity1_text} --[{relation_type}]--> {entity2_text}")
+                    print(f"  ✓ Relation LLM : {entity1_text} --[teachesSubject]--> {entity2_text}")
                 else:
                     if not domain_valid:
                         print(f"  ⚠️ teachesSubject rejeté : {entity1_text} n'est pas une Person")
                     if not range_valid:
                         print(f"  ⚠️ teachesSubject rejeté : {entity2_text} n'est pas un Document/Topic")
+                continue
+
+            if relation_type == "worksAt":
+                domain_valid = (entity1_uri, RDF.type, FOAF.Person) in graph
+                range_valid  = (entity2_uri, RDF.type, SCHEMA.Organization) in graph
+                if not range_valid:
+                    # Allow LOC→ORG adaptation only for institution-like names
+                    range_valid = adapt_entity_type(graph, entity2_uri, entity2_text, SCHEMA.Organization)
+                if domain_valid and range_valid:
+                    graph.add((entity1_uri, relation_prop, entity2_uri))
+                    print(f"  ✓ Relation LLM : {entity1_text} --[worksAt]--> {entity2_text}")
+                else:
+                    if not domain_valid:
+                        print(f"  ⚠️ worksAt rejeté : {entity1_text} n'est pas une Person")
+                    if not range_valid:
+                        print(f"  ⚠️ worksAt rejeté : {entity2_text} n'est pas une Organisation")
                 continue
             
             # VALIDATION FLEXIBLE AVEC TYPAGE ADAPTATIF ET MULTIPLES TYPES ACCEPTÉS
