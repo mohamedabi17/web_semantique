@@ -1118,6 +1118,25 @@ def extract_relations(graph, entity_uris, text):
     doc = nlp(text)
     verb_relations_added = 0
 
+    # ── Layer 7 helper ───────────────────────────────────────────────────────
+    # Resolve the entity text for a dependency-parse child token.
+    # Strategy 1 : look in doc.ents (spaCy built-in NER).
+    # Strategy 2 : look in entity_uris keys — HybridNER may have found spans
+    #              that spaCy's built-in NER missed (e.g. "Web Sémantique").
+    def _resolve_entity_text(child_token) -> Optional[str]:
+        """Return the entity_uris key covering *child_token*, or None."""
+        # Strategy 1 — spaCy doc.ents
+        for ent in doc.ents:
+            if child_token.i >= ent.start and child_token.i < ent.end:
+                if ent.text in entity_uris:
+                    return ent.text
+        # Strategy 2 — entity_uris keys that contain this token's text
+        tok_lower = child_token.text.lower()
+        for key in entity_uris:
+            if tok_lower in key.lower():
+                return key
+        return None
+
     for token in doc:
         if token.pos_ == "VERB":
             lemma = token.lemma_.lower()
@@ -1133,10 +1152,9 @@ def extract_relations(graph, entity_uris, text):
                 subject_text = None
                 for child in token.children:
                     if child.dep_ in ("nsubj", "nsubjpass"):
-                        for ent in doc.ents:
-                            if child.i >= ent.start and child.i < ent.end:
-                                subject_text = ent.text
-                                break
+                        subject_text = _resolve_entity_text(child)
+                        if subject_text:
+                            break
 
                 if not subject_text:
                     continue
@@ -1149,50 +1167,48 @@ def extract_relations(graph, entity_uris, text):
                 # Direct object → teachesSubject (TOPIC/Document)
                 for child in token.children:
                     if child.dep_ in ("dobj", "obj", "attr"):
-                        for ent in doc.ents:
-                            if child.i >= ent.start and child.i < ent.end:
-                                obj_uri = entity_uris.get(ent.text)
-                                if obj_uri and (
-                                    (obj_uri, RDF.type, EX.Document) in graph or
-                                    (obj_uri, RDF.type, EX.Topic)    in graph
-                                ):
-                                    graph.add((subject_uri, EX.teachesSubject, obj_uri))
-                                    print(f"  ✓ enseigner (dobj) → {subject_text} --[teachesSubject]--> {ent.text}")
-                                    verb_relations_added += 1
-                                    ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                        subject_uri, EX.teachesSubject, obj_uri,
-                                        confidence=0.85, source="verb_lemma_mapping")
-                                break
+                        obj_text = _resolve_entity_text(child)
+                        if obj_text:
+                            obj_uri = entity_uris.get(obj_text)
+                            if obj_uri and (
+                                (obj_uri, RDF.type, EX.Document) in graph or
+                                (obj_uri, RDF.type, EX.Topic)    in graph
+                            ):
+                                graph.add((subject_uri, EX.teachesSubject, obj_uri))
+                                print(f"  ✓ enseigner (dobj) → {subject_text} --[teachesSubject]--> {obj_text}")
+                                verb_relations_added += 1
+                                ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                    subject_uri, EX.teachesSubject, obj_uri,
+                                    confidence=0.85, source="verb_lemma_mapping")
+                        break
 
                 # Oblique / prepositional object → worksAt (ORG)
                 for child in token.children:
                     if child.dep_ in ("obl", "obl:mod", "obl:arg", "nmod", "prep"):
-                        for ent in doc.ents:
-                            if child.i >= ent.start and child.i < ent.end:
-                                obj_uri = entity_uris.get(ent.text)
-                                if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
-                                    graph.add((subject_uri, EX.worksAt, obj_uri))
-                                    print(f"  ✓ enseigner (obl) → {subject_text} --[worksAt]--> {ent.text}")
-                                    verb_relations_added += 1
-                                    ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                        subject_uri, EX.worksAt, obj_uri,
-                                        confidence=0.85, source="verb_lemma_mapping")
-                                break
+                        obj_text = _resolve_entity_text(child)
+                        if obj_text:
+                            obj_uri = entity_uris.get(obj_text)
+                            if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                graph.add((subject_uri, EX.worksAt, obj_uri))
+                                print(f"  ✓ enseigner (obl) → {subject_text} --[worksAt]--> {obj_text}")
+                                verb_relations_added += 1
+                                ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                    subject_uri, EX.worksAt, obj_uri,
+                                    confidence=0.85, source="verb_lemma_mapping")
                     # Also walk ADP → pobj (e.g. "à" → "Université de Versailles")
                     if child.pos_ == "ADP" and child.lower_ in _AT_PREPS:
                         for grandchild in child.children:
                             if grandchild.dep_ in ("pobj", "obj", "nmod"):
-                                for ent in doc.ents:
-                                    if grandchild.i >= ent.start and grandchild.i < ent.end:
-                                        obj_uri = entity_uris.get(ent.text)
-                                        if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
-                                            graph.add((subject_uri, EX.worksAt, obj_uri))
-                                            print(f"  ✓ enseigner (prep) → {subject_text} --[worksAt]--> {ent.text}")
-                                            verb_relations_added += 1
-                                            ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                                subject_uri, EX.worksAt, obj_uri,
-                                                confidence=0.85, source="verb_lemma_mapping")
-                                        break
+                                obj_text = _resolve_entity_text(grandchild)
+                                if obj_text:
+                                    obj_uri = entity_uris.get(obj_text)
+                                    if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                        graph.add((subject_uri, EX.worksAt, obj_uri))
+                                        print(f"  ✓ enseigner (prep) → {subject_text} --[worksAt]--> {obj_text}")
+                                        verb_relations_added += 1
+                                        ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                            subject_uri, EX.worksAt, obj_uri,
+                                            confidence=0.85, source="verb_lemma_mapping")
 
                 # Positional fallback: dep parse missed the objects — scan by type
                 already_linked = set(graph.objects(subject_uri, EX.teachesSubject)) | \
@@ -1231,20 +1247,16 @@ def extract_relations(graph, entity_uris, text):
             # Chercher le sujet (nsubj)
             for child in token.children:
                 if child.dep_ in ["nsubj", "nsubjpass"]:
-                    # Récupérer l'entité complète (avec composés)
-                    for ent in doc.ents:
-                        if child.i >= ent.start and child.i < ent.end:
-                            subject_text = ent.text
-                            break
+                    subject_text = _resolve_entity_text(child)
+                    if subject_text:
+                        break
 
             # Chercher l'objet (dobj, attr)
             for child in token.children:
                 if child.dep_ in ["dobj", "obj", "attr", "obl"]:
-                    # Récupérer l'entité complète
-                    for ent in doc.ents:
-                        if child.i >= ent.start and child.i < ent.end:
-                            object_text = ent.text
-                            break
+                    object_text = _resolve_entity_text(child)
+                    if object_text:
+                        break
 
             # Si sujet et objet trouvés, créer la relation
             if subject_text and object_text:
