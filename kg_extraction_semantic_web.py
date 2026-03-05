@@ -1118,10 +1118,25 @@ def extract_relations(graph, entity_uris, text):
     #   • PER --[teachesSubject]--> TOPIC/Document  (direct object)
     #   • PER --[worksAt]-->        ORG              (prepositional object)
     verb_mapping = {
+        # authorship verbs
         "écrire":    ("author",   FOAF.Person, EX.Document),
+        "publier":   ("author",   FOAF.Person, EX.Document),
+        "rédiger":   ("author",   FOAF.Person, EX.Document),
+        "write":     ("author",   FOAF.Person, EX.Document),
+        "publish":   ("author",   FOAF.Person, EX.Document),
+        # workplace verbs
         "travailler": ("worksAt", FOAF.Person, SCHEMA.Organization),
+        "work":       ("worksAt", FOAF.Person, SCHEMA.Organization),
+        # management verbs — range is ORG (department = Organisation subtype)
         "diriger":   ("manages",  FOAF.Person, SCHEMA.Organization),
-        "étudier":   ("studiesAt", FOAF.Person, EX.Document),
+        "gérer":     ("manages",  FOAF.Person, SCHEMA.Organization),
+        "manage":    ("manages",  FOAF.Person, SCHEMA.Organization),
+        # study verbs — range is SCHEMA.Organization (university)
+        "étudier":   ("studiesAt", FOAF.Person, SCHEMA.Organization),
+        "study":     ("studiesAt", FOAF.Person, SCHEMA.Organization),
+        # collaboration verbs
+        "collaborer": ("collaboratesWith", FOAF.Person, SCHEMA.Organization),
+        "collaborate": ("collaboratesWith", FOAF.Person, SCHEMA.Organization),
     }
 
     # Prepositions that introduce a workplace in French / English
@@ -1369,8 +1384,17 @@ def extract_relations(graph, entity_uris, text):
 
             if subject_uri and object_uri:
                 # Vérification domain/range
+                # For verbs whose range is schema:Organization (worksAt, manages,
+                # studiesAt, collaboratesWith) we also accept ex:Document and
+                # ex:Topic because departments / labs are sometimes typed that way.
+                _flex_range = frozenset([SCHEMA.Organization, EX.Document, EX.Topic])
                 domain_valid = (subject_uri, RDF.type, domain_class) in graph
-                range_valid = (object_uri, RDF.type, range_class) in graph
+                if range_class == SCHEMA.Organization:
+                    range_valid = any(
+                        (object_uri, RDF.type, rc) in graph for rc in _flex_range
+                    )
+                else:
+                    range_valid = (object_uri, RDF.type, range_class) in graph
 
                 if domain_valid and range_valid:
                     relation_prop = getattr(EX, property_name)
@@ -1446,7 +1470,8 @@ def extract_relations(graph, entity_uris, text):
 
     # Collect pairs already handled by Layer 7 (verb dispatch) to avoid duplication
     _layer7_covered = set()
-    for prop in (EX.teachesSubject, EX.worksAt, EX.author, EX.manages, EX.studiesAt, EX.uses):
+    for prop in (EX.teachesSubject, EX.worksAt, EX.author, EX.manages,
+                   EX.studiesAt, EX.uses, EX.collaboratesWith):
         for s, _, o in graph.triples((None, prop, None)):
             _layer7_covered.add((str(s), str(o)))
 
