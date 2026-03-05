@@ -213,7 +213,7 @@ class HybridNERModule:
         
         # COUCHE 7 : Mapping lemme → propriété OWL
         self.verb_to_property_map = {
-            "enseigner": ("teaches", FOAF.Person, EX.Document),
+            "enseigner": ("teachesSubject", FOAF.Person, EX.Document),
             "écrire": ("author", FOAF.Person, EX.Document),
             "travailler": ("worksAt", FOAF.Person, SCHEMA.Organization),
             "diriger": ("manages", FOAF.Person, SCHEMA.Organization),
@@ -221,6 +221,12 @@ class HybridNERModule:
             "étudier": ("studies", FOAF.Person, EX.Document),
             "créer": ("creates", FOAF.Person, None),
             "développer": ("develops", FOAF.Person, None),
+            # Location verbs
+            "situer": ("locatedIn", None, SCHEMA.Place),
+            "localiser": ("locatedIn", None, SCHEMA.Place),
+            "baser": ("locatedIn", None, SCHEMA.Place),
+            "locate": ("locatedIn", None, SCHEMA.Place),
+            "base": ("locatedIn", None, SCHEMA.Place),
         }
         
         print("[HybridNERModule] ✅ Initialisé avec 7 couches activées")
@@ -243,6 +249,21 @@ class HybridNERModule:
             
             # Patterns pour entités académiques françaises
             patterns = [
+                # ── Known acronym ORGs ─────────────────────────────────────
+                {"label": "ORG", "pattern": "MIT"},
+                {"label": "ORG", "pattern": "EPFL"},
+                {"label": "ORG", "pattern": "CNRS"},
+                {"label": "ORG", "pattern": "INRIA"},
+                {"label": "ORG", "pattern": "ENSIAS"},
+                {"label": "ORG", "pattern": "ENSIMAG"},
+                {"label": "ORG", "pattern": "CEA"},
+                {"label": "ORG", "pattern": "NASA"},
+                {"label": "ORG", "pattern": "CHU"},
+                {"label": "ORG", "pattern": "INSERM"},
+                {"label": "ORG", "pattern": "Oxford"},
+                {"label": "ORG", "pattern": "Cambridge"},
+                {"label": "ORG", "pattern": "Stanford"},
+                {"label": "ORG", "pattern": "Harvard"},
                 # ── Universités : formes spécifiques ──────────────────────
                 {"label": "ORG", "pattern": "Université Paris-Saclay"},
                 {"label": "ORG", "pattern": "Université de Versailles"},
@@ -261,13 +282,17 @@ class HybridNERModule:
                 {"label": "ORG", "pattern": "University of Oxford"},
                 {"label": "ORG", "pattern": "University of Cambridge"},
                 {"label": "ORG", "pattern": "MIT Media Lab"},
-                # Generic: université/university + one title-case word
-                {"label": "ORG", "pattern": [{"LOWER": "université"}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": "university"}, {"LOWER": "of"}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["institute", "institut"]}}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["center", "centre"]}}, {"LOWER": {"IN": ["de", "of", "for"]}}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["department", "département"]}}, {"LOWER": "of"}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["école", "school", "college"]}}, {"IS_TITLE": True}]},
+                # Generic tokenized patterns (université/university + title-case words)
+                {"label": "ORG", "pattern": [{"LOWER": "université"}, {"LOWER": "de", "OP": "?"}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": [{"LOWER": "university"}, {"LOWER": "of", "OP": "?"}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["institute", "institut"]}}, {"LOWER": "de", "OP": "?"}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["center", "centre"]}}, {"LOWER": {"IN": ["de", "of", "for"]}, "OP": "?"}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["department", "département"]}}, {"LOWER": "of", "OP": "?"}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": [{"LOWER": {"IN": ["école", "school", "college"]}}, {"IS_TITLE": True, "OP": "+"}]},
+                {"label": "ORG", "pattern": "Department of Computer Science"},
+                {"label": "ORG", "pattern": "Department of Mathematics"},
+                {"label": "ORG", "pattern": "Department of Physics"},
+                {"label": "ORG", "pattern": [{"LOWER": "dept"}, {"LOWER": "of"}, {"IS_TITLE": True}]},
 
                 # ── Matières/Topics académiques ────────────────────────────
                 {"label": "TOPIC", "pattern": "Web Sémantique"},
@@ -307,28 +332,19 @@ class HybridNERModule:
                 {"label": "TOPIC", "pattern": "natural language processing"},
                 # Short academic acronyms (Task 3)
                 {"label": "TOPIC", "pattern": [{"TEXT": {"REGEX": r"^(AI|ML|DL|NLP|KG|CV|GL)$"}}]},
-                # Common multi-word academic subjects
                 {"label": "TOPIC", "pattern": "Data Mining"},
                 {"label": "TOPIC", "pattern": "data mining"},
                 {"label": "TOPIC", "pattern": "Text Mining"},
                 {"label": "TOPIC", "pattern": "Information Retrieval"},
                 {"label": "TOPIC", "pattern": "information retrieval"},
-                {"label": "TOPIC", "pattern": "Data Science"},
-                {"label": "TOPIC", "pattern": "data science"},
-                # English department patterns
-                {"label": "ORG", "pattern": "Department of Computer Science"},
-                {"label": "ORG", "pattern": "Department of Mathematics"},
-                {"label": "ORG", "pattern": "Department of Physics"},
-                {"label": "ORG", "pattern": [{"LOWER": "department"}, {"LOWER": "of"}, {"IS_TITLE": True}]},
-                {"label": "ORG", "pattern": [{"LOWER": "dept"}, {"LOWER": "of"}, {"IS_TITLE": True}]},
 
-                # ── Technologies (DOCUMENT context) ───────────────────────
-                {"label": "DOCUMENT", "pattern": "RDF"},
-                {"label": "DOCUMENT", "pattern": "RDFS"},
-                {"label": "DOCUMENT", "pattern": "OWL"},
-                {"label": "DOCUMENT", "pattern": "SPARQL"},
-                {"label": "DOCUMENT", "pattern": "JSON-LD"},
-                {"label": "DOCUMENT", "pattern": "Turtle"},
+                # ── Tech standards always classified as TOPIC ──────────────
+                {"label": "TOPIC", "pattern": "RDF"},
+                {"label": "TOPIC", "pattern": "RDFS"},
+                {"label": "TOPIC", "pattern": "OWL"},
+                {"label": "TOPIC", "pattern": "SPARQL"},
+                {"label": "TOPIC", "pattern": "JSON-LD"},
+                {"label": "TOPIC", "pattern": "Turtle"},
 
                 # ── Titres académiques ─────────────────────────────────────
                 {"label": "PER", "pattern": [{"LOWER": {"IN": ["professeur", "prof", "dr", "docteur"]}}, {"IS_TITLE": True}]},
@@ -478,7 +494,28 @@ class HybridNERModule:
             print(f"\n  📊 Statistiques Couche 1 : {len(entities)} entités détectées")
             for ent_type, count in sorted(type_counts.items()):
                 print(f"     • {ent_type}: {count}")
-        
+
+        # ── Known-city LOC override ──────────────────────────────────────────
+        # spaCy fr_core_news_sm sometimes tags English/US city names (Cambridge,
+        # Oxford…) as ORG because they share names with famous universities.
+        # Force them to LOC to keep downstream relation logic correct.
+        _KNOWN_CITIES: frozenset = frozenset([
+            "cambridge", "oxford", "berkeley", "boston", "london",
+            "paris", "lyon", "bordeaux", "toulouse", "lille",
+            "versailles", "strasbourg", "montpellier", "rennes",
+            "grenoble", "nantes", "toulon", "tokyo", "berlin",
+            "redmond", "seattle", "new york", "san francisco",
+        ])
+        corrected: List[Tuple[str, str, float]] = []
+        for e_text, e_type, e_conf in entities:
+            if e_type == "ORG" and e_text.lower() in _KNOWN_CITIES:
+                corrected.append((e_text, "LOC", e_conf))
+                if verbose:
+                    print(f"  📌 City-override : '{e_text}' ORG → LOC")
+            else:
+                corrected.append((e_text, e_type, e_conf))
+        entities = corrected
+
         return entities
     
     def _layer3_propn_heuristics(self, doc: Doc, verbose: bool) -> List[Tuple[str, str, float]]:
@@ -509,11 +546,34 @@ class HybridNERModule:
         # is a PROPN or NOUN (bridging pattern: PROPN ADP/DET PROPN).
         _CONNECTORS = frozenset(["de", "d'", "du", "des", "of", "for", "la", "le", "-", "–", "—"])
 
+        # NOUNs whose lemma corresponds to a verb (spaCy fr_core_news_sm sometimes
+        # mislabels conjugated verbs like "utilise" as NOUN). These tokens must
+        # never be absorbed into a compound entity window.
+        _VERB_LEMMAS_L3A: frozenset = frozenset([
+            # infinitives
+            "utiliser", "permettre", "définir", "décrire", "représenter",
+            "inclure", "exister", "avoir", "être", "comporter", "comprendre",
+            "contenir", "traiter", "concerner", "porter", "reposer",
+            "use", "allow", "define", "describe", "represent", "include",
+            # conjugated forms that spaCy may return as lemma (no proper lemmatisation)
+            "utilise", "utilises", "utilisons", "utilisent",
+            "permet", "permet",
+            "définit", "décrit", "représente",
+            "inclut", "comprend", "contient", "traite",
+        ])
+
         entities: List[Tuple[str, str, float]] = []
         propn_tokens_found = 0
 
         def _is_content(tok_: "Token") -> bool:
-            """True when a token can extend a compound entity (PROPN or bridgeable NOUN)."""
+            """True when a token can extend a compound entity (PROPN or bridgeable NOUN).
+            Rejects NOUNs whose lemma or surface form is a known verb (spaCy fr_core_news_sm
+            sometimes mislabels conjugated verbs such as 'utilise' as NOUN)."""
+            if tok_.pos_ == "NOUN" and (
+                tok_.lemma_.lower() in _VERB_LEMMAS_L3A
+                or tok_.text.lower() in _VERB_LEMMAS_L3A
+            ):
+                return False
             return tok_.pos_ in ("PROPN", "NOUN")
 
         # Iterate token-by-token; accumulate a "window" of tokens that
@@ -546,19 +606,19 @@ class HybridNERModule:
                     propn_tokens_found += 1
                     propn_count += 1
                     j += 1
-                elif t.pos_ == "NOUN" and j + 1 < n and tokens[j + 1].pos_ in ("PROPN", "NOUN"):
+                elif t.pos_ == "NOUN" and t.lemma_.lower() not in _VERB_LEMMAS_L3A and t.text.lower() not in _VERB_LEMMAS_L3A and j + 1 < n and tokens[j + 1].pos_ in ("PROPN", "NOUN"):
                     # Bridge: NOUN between two content tokens (e.g. "MIT Media Lab",
                     # "Department of Computer Science" where Science is NOUN after PROPN)
                     window.append(t.text)
                     j += 1
-                elif t.pos_ == "NOUN" and j + 1 == n:
+                elif t.pos_ == "NOUN" and t.lemma_.lower() not in _VERB_LEMMAS_L3A and t.text.lower() not in _VERB_LEMMAS_L3A and j + 1 == n:
                     # Trailing NOUN at end of sentence — absorb only when window already
                     # has multiple PROPN tokens (avoids false positives)
                     if propn_count >= 2:
                         window.append(t.text)
                     j += 1
                     break
-                elif t.pos_ == "NOUN" and window and tokens[j - 1].pos_ == "PROPN":
+                elif t.pos_ == "NOUN" and t.lemma_.lower() not in _VERB_LEMMAS_L3A and t.text.lower() not in _VERB_LEMMAS_L3A and window and tokens[j - 1].pos_ == "PROPN":
                     # Trailing NOUN directly after a PROPN (e.g. "...of Computer Science.")
                     # peek: if next is PUNCT/end, absorb
                     nxt = tokens[j + 1] if j + 1 < n else None
@@ -619,8 +679,9 @@ class HybridNERModule:
             "de", "d'", "du", "des", "d",
             "of", "for", "at",
             "la", "le", "les",
-            "en", "et", "and",
             "-",
+            # NOTE: "et"/"and" are deliberately excluded — they are coordination
+            # conjunctions and should never appear inside an institution name.
         ])
         # POS tags that terminate an org span
         _STOP_POS = frozenset(["VERB", "AUX", "PUNCT", "SCONJ", "CCONJ"])
@@ -847,6 +908,25 @@ class HybridNERModule:
             "cours", "matière", "domaine", "sujet", "thème",
             "travail", "projet", "étude", "recherche", "analyse",
             "course", "topic", "field",
+            # French verb lemmas that spaCy sometimes tags as NOUN
+            "utiliser", "utilise", "utilisation",
+            "permettre", "permet",
+            "définir", "définit",
+            "décrire", "décrit",
+            "représenter", "représente",
+            "inclure", "inclut",
+        ])
+        # Common French verbs whose lemmas may appear as chunk roots when spaCy
+        # mislabels them as NOUN — guards against absorbing "utilise RDF" etc.
+        _VERB_LEMMA_STOP: frozenset = frozenset([
+            "utiliser", "utilise", "utilises", "utilisent",
+            "permettre", "permet",
+            "définir", "définit",
+            "décrire", "décrit",
+            "représenter", "représente",
+            "inclure", "inclut",
+            "exister", "avoir", "être",
+            "use", "allow", "define", "describe", "represent",
         ])
 
         for chunk in doc.noun_chunks:
@@ -862,8 +942,27 @@ class HybridNERModule:
             # Skip function/stop words (exact match on full chunk text)
             if chunk_lower in _CHUNK_STOPWORDS:
                 continue
-            # Skip if chunk root is a generic meta-noun
+            # Skip if chunk root is a generic meta-noun or verb-lemma
             if chunk.root.lower_ in _CHUNK_ROOT_STOP:
+                continue
+            if chunk.root.lemma_.lower() in _VERB_LEMMA_STOP:
+                continue
+            if chunk.root.text.lower() in _VERB_LEMMA_STOP:
+                continue
+            # Guard: if any token inside the chunk has a verbal POS, skip
+            # (spaCy occasionally tags verbs as NOUN — e.g. "utilise")
+            if any(t.pos_ == "VERB" or t.dep_ == "ROOT" and t.pos_ in ("VERB", "AUX")
+                   for t in chunk):
+                continue
+            # Guard: if any interior NOUN token's text/lemma is a known verb form, skip
+            # (spaCy fr_core_news_sm mislabels "utilise" as NOUN)
+            if any(
+                t.pos_ == "NOUN" and (
+                    t.text.lower() in _VERB_LEMMA_STOP
+                    or t.lemma_.lower() in _VERB_LEMMA_STOP
+                )
+                for t in chunk
+            ):
                 continue
             # Skip if already known
             if chunk_lower in already_in_doc2 or chunk_lower in already_in_entities2:
@@ -1118,11 +1217,15 @@ class HybridNERModule:
                     "le", "la", "les", "et", "and",
                 ])
                 words = clean_text.split()
-                cased = [
-                    w if (i > 0 and w.lower().rstrip("'") in _LOWERCASE_CONNECTORS)
-                    else w.capitalize()
-                    for i, w in enumerate(words)
-                ]
+                cased = []
+                for i, w in enumerate(words):
+                    # Preserve all-caps acronyms (MIT, CNRS, INRIA, EPFL, NASA, CHU…)
+                    if w.isupper() and len(w) >= 2:
+                        cased.append(w)
+                    elif i > 0 and w.lower().rstrip("'") in _LOWERCASE_CONNECTORS:
+                        cased.append(w)
+                    else:
+                        cased.append(w.capitalize())
                 # Capitalize the part after a hyphen (Paris-Saclay, Jean-Pierre)
                 clean_text = re.sub(
                     r'(-[a-zàâéèêùûîôœæç])',

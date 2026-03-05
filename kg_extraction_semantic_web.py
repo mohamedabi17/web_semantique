@@ -165,14 +165,6 @@ def define_tbox(graph):
     # Ces propriétés lient des RESSOURCES entre elles (URI vers URI)
     # Elles respectent la contrainte : domain → ObjectProperty → range
     
-    # Propriété : Une personne enseigne dans un lieu
-    graph.add((EX.teaches, RDF.type, OWL.ObjectProperty))
-    graph.add((EX.teaches, RDFS.label, Literal("enseigne à", lang="fr")))
-    graph.add((EX.teaches, RDFS.domain, FOAF.Person))  # Seules les Personnes peuvent enseigner
-    graph.add((EX.teaches, RDFS.range, SCHEMA.Place))  # Elles enseignent dans des Lieux
-    graph.add((EX.teaches, RDFS.comment, 
-               Literal("Relation entre une personne et le lieu où elle enseigne", lang="fr")))
-    
     # Propriété : Une personne rédige un document
     graph.add((EX.author, RDF.type, OWL.ObjectProperty))
     graph.add((EX.author, RDFS.label, Literal("a rédigé", lang="fr")))
@@ -180,14 +172,6 @@ def define_tbox(graph):
     graph.add((EX.author, RDFS.range, EX.Document))  # Elles rédigent des Documents
     graph.add((EX.a_redige, RDFS.comment, 
                Literal("Relation entre un auteur et un document qu'il a rédigé", lang="fr")))
-    
-    # Propriété : Un document traite d'un sujet (représenté par un concept)
-    graph.add((EX.traite_de, RDF.type, OWL.ObjectProperty))
-    graph.add((EX.traite_de, RDFS.label, Literal("traite de", lang="fr")))
-    graph.add((EX.traite_de, RDFS.domain, EX.Document))  # Un Document traite de...
-    graph.add((EX.traite_de, RDFS.range, RDFS.Resource))  # ...n'importe quelle ressource
-    graph.add((EX.traite_de, RDFS.comment, 
-               Literal("Relation entre un document et son sujet principal", lang="fr")))
     
     # Propriété : Une personne enseigne une matière/sujet (nouveau : teaches peut pointer vers un TOPIC)
     graph.add((EX.teachesSubject, RDF.type, OWL.ObjectProperty))
@@ -245,7 +229,7 @@ def define_tbox(graph):
     graph.add((EX.relatedTo, RDFS.comment, 
                Literal("Relation générique entre deux ressources", lang="fr")))
     
-    print("  ✓ ObjectProperties définies : ex:teaches, ex:teachesSubject, ex:author, ex:traite_de, ex:worksAt, ex:locatedIn, ex:collaboratesWith, ex:studiesAt, ex:manages, ex:relatedTo")
+    print("  ✓ ObjectProperties définies : ex:teachesSubject, ex:author, ex:worksAt, ex:locatedIn, ex:collaboratesWith, ex:studiesAt, ex:manages, ex:relatedTo")
     
     # -----------------------------------------------------------------------
     # 2.3 PROPRIÉTÉS DE DONNÉES (owl:DatatypeProperty)
@@ -339,11 +323,11 @@ def predict_relation_real_api(entity1: str, entity2: str, sentence: str,
         sentence (str): Phrase complète contenant les entités
         
     Returns:
-        str: Le type de relation détecté ("teaches", "author", "worksAt", "relatedTo")
+        str: Le type de relation détecté ("teachesSubject", "author", "worksAt", "relatedTo")
     
     Exemples:
         >>> predict_relation_real_api("Marie", "Université", "Marie enseigne à l'Université")
-        'teaches'
+        'teachesSubject'
     """
     
     # Clé API Groq (chargée depuis .env)
@@ -540,7 +524,15 @@ No explanations."""
         is_vraie_ville = any(ville in entity2_lower for ville in vraies_villes) and \
                         not any(bat in entity2_lower for bat in batiments_institutions)
         is_batiment = any(bat in entity2_lower for bat in batiments_institutions)
-        
+
+        # Location verb detection (P2 fix)
+        _location_verbs = ["situé", "située", "situés", "situées", "situer",
+                           "localisé", "localisée", "localisés", "localisées", "localiser",
+                           "basé", "basée", "basés", "basées", "baser",
+                           "located", "location", "based", "is in", "est à",
+                           "se trouve", "se situe"]
+        _location_in_ctx = any(kw in local_context for kw in _location_verbs)
+
         # === PRIORITÉS BASÉES SUR LE CONTEXTE LOCAL (pas toute la phrase) ===
 
         # PRIORITÉ 0 : Enseignement — dispatch selon le type de entity2
@@ -557,7 +549,8 @@ No explanations."""
 
         org_keywords = ["université", "university", "institute", "institut", "laboratoire",
                         "lab", "department", "département", "centre", "center", "school",
-                        "college", "école", "inria", "cnrs"]
+                        "college", "école", "inria", "cnrs",
+                        "mit", "epfl", "stanford", "harvard", "oxford", "cambridge"]
 
         # Type-first resolution (NER parameter > keyword heuristic)
         if entity2_type == "TOPIC":
@@ -576,37 +569,51 @@ No explanations."""
         _teach_verbs = ["enseigne", "enseigné", "enseignant", "teach", "taught", "teaching"]
         _teach_in_ctx = any(kw in local_context for kw in _teach_verbs)
 
-        if _teach_in_ctx and is_topic:
+        # Guard: priorities 0a/0b/1/2/3/4 are only valid when entity1 is a Person.
+        # Without this guard, TOPIC/ORG subjects would inherit person-only relations.
+        _entity1_is_person = entity1_type == "PER"
+
+        # PRIORITÉ -1 : Localisation explicite (situé/localisé/based/located)
+        # Takes precedence over all other rules — purely positional semantics.
+        if _location_in_ctx and entity2_type in ("LOC", "UNK") or \
+           (_location_in_ctx and is_vraie_ville):
+            relation = "locatedIn"
+            print(f"  📍 Priorité -1 : verbe localisation → locatedIn")
+
+        elif _teach_in_ctx and is_topic and _entity1_is_person:
             relation = "teachesSubject"
             print(f"  🎓 Priorité 0a : 'enseigne' + matière '{entity2}' → teachesSubject")
 
-        elif _teach_in_ctx and is_org:
+        elif _teach_in_ctx and is_org and _entity1_is_person:
             relation = "worksAt"
             print(f"  🏫 Priorité 0b : 'enseigne' + organisation '{entity2}' → worksAt")
 
         # PRIORITÉ 1 : Enseignement générique (type de entity2 inconnu)
         elif any(kw in local_context for kw in ["enseigne", "enseigné", "enseignant", "professeur",
-                                                  "teach", "professor", "taught", "teaching"]):
+                                                  "teach", "professor", "taught", "teaching"]) \
+             and _entity1_is_person:
             relation = "teachesSubject"
             print(f"  🎓 Priorité 1 : 'enseigne/professeur' → teachesSubject (défaut)")
         
         # PRIORITÉ 2 : Direction/Management (mots-clés de management)
         # IMPORTANT : Seulement si entity1 est une personne ET entity2 est une organisation
         elif any(kw in local_context for kw in ["dirige", "gère", "manage", "manages", "ceo", "dirigeant"]) and \
-             not is_vraie_ville:  # Exclure les villes (on ne dirige pas une ville)
+             not is_vraie_ville and _entity1_is_person:
             relation = "manages"
             print(f"  💼 Priorité 2 : Détection 'dirige/gère' dans contexte local → Force manages")
         
         # PRIORITÉ 3 : Travail/Emploi (personne → organisation/bâtiment)
         # IMPORTANT : "travaille à X" devrait être worksAt même si X est une ville
         # car dans contexte professionnel, c'est souvent une organisation (ex: Université de Versailles)
-        elif any(kw in local_context for kw in ["travaille", "works", "employé", "employee"]):
+        elif any(kw in local_context for kw in ["travaille", "works", "employé", "employee"]) \
+             and _entity1_is_person:
             # Dans contexte de travail, privilégier worksAt (organisation implicite)
             relation = "worksAt"
             print(f"  💼 Priorité 3 : Détection 'travaille' → Force worksAt (contexte professionnel)")
         
         # PRIORITÉ 4 : Rédaction/Auteur (mots-clés de création)
-        elif any(kw in local_context for kw in ["auteur", "rédigé", "écrit", "author", "wrote", "written", "écrivain", "a écrit"]):
+        elif any(kw in local_context for kw in ["auteur", "rédigé", "écrit", "author", "wrote", "written", "écrivain", "a écrit"]) \
+             and _entity1_is_person:
             relation = "author"
             print(f"  ✍️ Priorité 4 : Détection 'auteur/écrit' dans contexte local → Force author")
         
@@ -1280,25 +1287,31 @@ def extract_relations(graph, entity_uris, text):
     # has at least one admissible relation.  This avoids noise triples like
     # TOPIC --[author]--> ORG  or  ORG --[worksAt]--> LOC.
     RELATION_TABLE = {
-        ("PER", "TOPIC"):  ["teachesSubject", "author", "relatedTo"],
-        ("PER", "ORG"):    ["worksAt", "manages", "studiesAt", "collaboratesWith", "relatedTo"],
-        # PER→LOC includes worksAt: an institution may be NER-typed LOC and later
-        # promoted to ORG by adapt_entity_type (guarded against bare cities).
-        ("PER", "LOC"):    ["worksAt", "locatedIn", "relatedTo"],
-        ("PER", "PER"):    ["collaboratesWith", "relatedTo"],
-        ("ORG", "LOC"):    ["locatedIn", "relatedTo"],
-        ("ORG", "ORG"):    ["relatedTo"],
-        ("ORG", "PER"):    ["relatedTo"],
+        # ── Strict admissibility table (P3 fix) ──────────────────────────
+        # Only pairs with a clear OWL-grounded semantic are listed.
+        # Pairs absent from the table are silently skipped (no triple generated).
+        # "relatedTo" is kept only for same-domain pairs where a weaker link
+        # is still meaningful (TOPIC↔TOPIC, ORG↔ORG).
+        ("PER", "TOPIC"):  ["teachesSubject", "author"],
+        ("PER", "ORG"):    ["worksAt", "manages", "studiesAt", "collaboratesWith"],
+        # PER→LOC: worksAt allowed when entity is institution-like (adapt_entity_type guard)
+        ("PER", "LOC"):    ["worksAt", "locatedIn"],
+        ("PER", "PER"):    ["collaboratesWith"],
+        ("ORG", "LOC"):    ["locatedIn"],
+        ("ORG", "ORG"):    ["collaboratesWith", "relatedTo"],
+        ("ORG", "PER"):    [],           # no valid OWL property in this direction
+        ("ORG", "TOPIC"):  [],           # no valid OWL property
         ("TOPIC", "TOPIC"):["relatedTo"],
-        ("TOPIC", "ORG"):  ["relatedTo"],
-        ("LOC", "LOC"):    ["locatedIn", "relatedTo"],
+        ("TOPIC", "ORG"):  [],           # no valid OWL property
+        ("TOPIC", "PER"):  [],
+        ("LOC", "LOC"):    ["locatedIn"],
         # UNK: type could not be resolved — allow all, priority logic will decide
         ("PER", "UNK"):    ["teachesSubject", "author", "worksAt", "manages",
-                            "studiesAt", "collaboratesWith", "locatedIn", "relatedTo"],
+                            "studiesAt", "collaboratesWith", "locatedIn"],
         ("UNK", "TOPIC"):  ["teachesSubject", "author", "relatedTo"],
-        ("UNK", "ORG"):    ["worksAt", "manages", "studiesAt", "relatedTo"],
-        ("UNK", "LOC"):    ["locatedIn", "relatedTo"],
-        ("UNK", "UNK"):    ["relatedTo"],
+        ("UNK", "ORG"):    ["worksAt", "manages", "studiesAt"],
+        ("UNK", "LOC"):    ["locatedIn"],
+        ("UNK", "UNK"):    [],
     }
 
     # Build a reverse map: entity_uri → NER type (PER/ORG/LOC/TOPIC/DOC)
@@ -1339,12 +1352,17 @@ def extract_relations(graph, entity_uris, text):
             e2_type = _ner_type_of(entity2_uri)
 
             # Pre-filter: skip pairs with no admissible relation in the table
-            allowed_relations = RELATION_TABLE.get((e1_type, e2_type), [])
-            if not allowed_relations:
+            allowed_relations = RELATION_TABLE.get((e1_type, e2_type), None)
+            if allowed_relations is None:
                 # Try reverse direction before giving up
-                allowed_relations = RELATION_TABLE.get((e2_type, e1_type), [])
-            if not allowed_relations:
+                allowed_relations = RELATION_TABLE.get((e2_type, e1_type), None)
+            # Empty list means "no valid relation for this pair" — skip entirely (P3 fix)
+            if allowed_relations is not None and len(allowed_relations) == 0:
                 print(f"  ⛔ Paire ignorée (aucune relation OWL admissible) : "
+                      f"{entity1_text}({e1_type}) ↔ {entity2_text}({e2_type})")
+                continue
+            if allowed_relations is None:
+                print(f"  ⛔ Paire ignorée (type inconnu) : "
                       f"{entity1_text}({e1_type}) ↔ {entity2_text}({e2_type})")
                 continue
 
@@ -1357,17 +1375,16 @@ def extract_relations(graph, entity_uris, text):
             if relation_type is None:
                 continue
 
-            # Post-call ontology guard: reject anything outside the admissible set.
-            # "relatedTo" is always a safe fallback so we allow it even if not in table.
-            if relation_type != "relatedTo" and relation_type not in allowed_relations:
+            # Post-call ontology guard: LLM result MUST be in allowed_relations.
+            # No automatic relatedTo fallback — if not admissible, skip the triple.
+            if relation_type not in allowed_relations:
                 print(f"  ⛔ LLM retourné '{relation_type}' n'est pas admissible pour "
-                      f"({e1_type}→{e2_type}). Forcé → relatedTo")
-                relation_type = "relatedTo"
+                      f"({e1_type}→{e2_type}). Triple ignoré.")
+                continue
             
             # Mapping des relations prédites vers les propriétés OWL avec contraintes flexibles
             # Note : teaches accepte Place OU Organization (université = organisation)
             relation_mapping = {
-                "teaches": (EX.teaches, FOAF.Person, [SCHEMA.Place, SCHEMA.Organization]),  # Personne → Lieu OU Organisation
                 "teachesSubject": (EX.teachesSubject, FOAF.Person, EX.Document),  # ✨ Personne → Matière/Topic
                 "author": (EX.author, FOAF.Person, EX.Document),  # Auteur → Document
                 "worksAt": (EX.worksAt, FOAF.Person, SCHEMA.Organization),
@@ -1545,7 +1562,11 @@ def apply_reification_to_relations(graph, source_file="texte_exemple.txt"):
     print("\n[RÉIFICATION] Application de la réification aux relations...")
     
     # Liste des propriétés ObjectProperty à réifier
-    properties_to_reify = [EX.teaches, EX.author, EX.traite_de, EX.relatedTo, EX.worksAt]
+    properties_to_reify = [
+        EX.teachesSubject, EX.author, EX.worksAt,
+        EX.locatedIn, EX.collaboratesWith, EX.studiesAt,
+        EX.manages, EX.relatedTo,
+    ]
     
     reified_count = 0
     for prop in properties_to_reify:
