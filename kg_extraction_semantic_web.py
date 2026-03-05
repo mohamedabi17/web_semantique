@@ -1775,9 +1775,38 @@ def extract_relations(graph, entity_uris, text):
                     print(f"  ⚠️ Type range invalide pour {entity2_text} (attendu: Place)")
                     
             elif relation_type == "relatedTo":
-                # Relation générique sans contrainte de type
-                graph.add((entity1_uri, relation_prop, entity2_uri))
-                print(f"  ✓ Relation LLM : {entity1_text} --[{relation_type}]--> {entity2_text}")
+                # ── relatedTo guard: fallback only ──────────────────────────
+                # Rule 1 – suppress between two Document/Topic entities:
+                # relatedTo is not meaningful between two topics.
+                both_docs = (
+                    (entity1_uri, RDF.type, EX.Document) in graph and
+                    (entity2_uri, RDF.type, EX.Document) in graph
+                )
+                # Rule 2 – suppress if a stronger semantic relation already
+                # exists between this pair (in either direction).
+                _STRONGER = (
+                    EX.teachesSubject, EX.author,  EX.worksAt,    EX.locatedIn,
+                    EX.collaboratesWith, EX.studiesAt, EX.manages, EX.uses,
+                )
+                already_related = any(
+                    (entity1_uri, prop, entity2_uri) in graph or
+                    (entity2_uri, prop, entity1_uri) in graph
+                    for prop in _STRONGER
+                )
+                # Rule 3 – suppress if relatedTo already exists in either direction.
+                already_related = already_related or (
+                    (entity1_uri, EX.relatedTo, entity2_uri) in graph or
+                    (entity2_uri, EX.relatedTo, entity1_uri) in graph
+                )
+                if both_docs:
+                    print(f"  ⏭️  relatedTo supprimé (TOPIC↔TOPIC non informatif) : "
+                          f"{entity1_text} ↔ {entity2_text}")
+                elif already_related:
+                    print(f"  ⏭️  relatedTo supprimé (relation plus forte déjà présente) : "
+                          f"{entity1_text} ↔ {entity2_text}")
+                else:
+                    graph.add((entity1_uri, relation_prop, entity2_uri))
+                    print(f"  ✓ Relation LLM : {entity1_text} --[{relation_type}]--> {entity2_text}")
 
 
 # ============================================================================
