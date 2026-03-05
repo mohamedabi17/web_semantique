@@ -516,6 +516,29 @@ class HybridNERModule:
                 corrected.append((e_text, e_type, e_conf))
         entities = corrected
 
+        # ── Sentence-boundary trimming ────────────────────────────────────────
+        # spaCy fr_core_news_sm sometimes produces entity spans that straddle a
+        # sentence boundary, e.g. "Université Mohammed V. Elle".
+        # Clip such spans at the first sentence-ending punctuation followed by a
+        # pronoun or capitalised non-PROPN token.
+        import re as _re
+        _SENT_BREAK = _re.compile(
+            r"(?<=[.!?])\s+(?:Il|Elle|Ils|Elles|On|Nous|Vous|He|She|They|We)\b",
+            _re.IGNORECASE,
+        )
+        clipped: List[Tuple[str, str, float]] = []
+        for e_text, e_type, e_conf in entities:
+            m = _SENT_BREAK.search(e_text)
+            if m:
+                trimmed = e_text[: m.start()].strip().rstrip(".")
+                if len(trimmed) >= 2:
+                    if verbose:
+                        print(f"  ✂️  Sentence-trim : '{e_text}' → '{trimmed}'")
+                    clipped.append((trimmed, e_type, e_conf))
+                    continue
+            clipped.append((e_text, e_type, e_conf))
+        entities = clipped
+
         return entities
     
     def _layer3_propn_heuristics(self, doc: Doc, verbose: bool) -> List[Tuple[str, str, float]]:
@@ -852,10 +875,17 @@ class HybridNERModule:
             if candidate_tok.pos_ not in ("NOUN", "PROPN"):
                 continue
 
-            # Collect consecutive NOUN/PROPN/ADJ tokens as the topic span
+            # Collect consecutive NOUN/PROPN/ADJ tokens as the topic span.
+            # Stop at ADP/PUNCT/VERB to prevent absorbing "à l'Université …" etc.
             span_tokens: List[str] = [candidate_tok.text]
             k = j2 + 1
             while k < n and tokens[k].pos_ in ("NOUN", "PROPN", "ADJ"):
+                # Stop when we hit a preposition-like NOUN that signals a new
+                # prepositional phrase, e.g. "à" tagged as NOUN by spaCy.
+                if tokens[k].lower_ in ("à", "au", "aux", "de", "du", "des",
+                                        "en", "par", "pour", "sur", "dans",
+                                        "at", "in", "of", "on", "by", "for"):
+                    break
                 span_tokens.append(tokens[k].text)
                 k += 1
             topic_text = " ".join(span_tokens)

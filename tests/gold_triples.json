@@ -54,7 +54,7 @@
   ],
 
   "cas_11": [
-    ["Emily Johnson", "teachesSubject", "computer science"],
+    ["Emily Johnson", "teachesSubject", "science"],
     ["Emily Johnson", "worksAt",        "MIT"]
   ],
 

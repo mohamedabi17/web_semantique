@@ -1171,6 +1171,8 @@ def extract_relations(graph, entity_uris, text):
         "utilise": "utiliser", "utilises": "utiliser", "utilisent": "utiliser",
         "permet": "permettre", "permets": "permettre",
         "définit": "définir",  "décrit": "décrire",
+        "teaches": "enseigner", "collabore": "collaborer",
+        "étudie": "étudier",   "étudiez": "étudier",
     }
 
     for token in doc:
@@ -1277,6 +1279,144 @@ def extract_relations(graph, entity_uris, text):
                         print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[worksAt]--> {ent_text}")
                         verb_relations_added += 1
             continue  # done with this enseigner token
+
+        # ================================================================
+        # DEP-PARSE DISPATCH FOR 'étudier' / 'study'
+        # Rule: PER --[studiesAt]--> ORG  (oblique / prep obj = university)
+        #       PER --[teachesSubject]--> TOPIC  (dobj = subject studied)
+        # "Fatima El Amrani étudie la sémantique formelle à l'Université V."
+        # ================================================================
+        if lemma in ("étudier", "study", "étudier"):
+            subject_text = None
+            for child in token.children:
+                if child.dep_ in ("nsubj", "nsubjpass"):
+                    subject_text = _resolve_entity_text(child)
+                    if subject_text:
+                        break
+            if not subject_text:
+                continue
+            subject_uri = entity_uris.get(subject_text)
+            if not subject_uri:
+                continue
+            if (subject_uri, RDF.type, FOAF.Person) not in graph:
+                continue
+
+            # Oblique argument → studiesAt (ORG = university)
+            for child in token.children:
+                if child.dep_ in ("obl:arg", "obl", "obl:mod", "nmod", "prep"):
+                    obj_text = _resolve_entity_text(child)
+                    if obj_text:
+                        obj_uri = entity_uris.get(obj_text)
+                        if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                            graph.add((subject_uri, EX.studiesAt, obj_uri))
+                            print(f"  ✓ étudier (obl) → {subject_text} --[studiesAt]--> {obj_text}")
+                            verb_relations_added += 1
+                            ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                subject_uri, EX.studiesAt, obj_uri,
+                                confidence=0.85, source="verb_lemma_mapping")
+                # Walk ADP → pobj
+                if child.pos_ == "ADP" and child.lower_ in _AT_PREPS:
+                    for grandchild in child.children:
+                        if grandchild.dep_ in ("pobj", "obj", "nmod"):
+                            obj_text = _resolve_entity_text(grandchild)
+                            if obj_text:
+                                obj_uri = entity_uris.get(obj_text)
+                                if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                    graph.add((subject_uri, EX.studiesAt, obj_uri))
+                                    print(f"  ✓ étudier (prep) → {subject_text} --[studiesAt]--> {obj_text}")
+                                    verb_relations_added += 1
+
+            # Positional fallback: ORG entity after the verb → studiesAt
+            if not list(graph.objects(subject_uri, EX.studiesAt)):
+                verb_pos = token.i
+                for ent_text, ent_uri in entity_uris.items():
+                    if ent_text == subject_text:
+                        continue
+                    if (ent_uri, RDF.type, SCHEMA.Organization) not in graph:
+                        continue
+                    tok_positions = [t.i for t in doc if t.text in ent_text.split()]
+                    if tok_positions and min(tok_positions) > verb_pos:
+                        graph.add((subject_uri, EX.studiesAt, ent_uri))
+                        print(f"  ✓ étudier (pos-fallback) → {subject_text} --[studiesAt]--> {ent_text}")
+                        verb_relations_added += 1
+                        break
+            continue  # done with this étudier token
+
+        # ================================================================
+        # DEP-PARSE DISPATCH FOR 'collaborer' / 'collaborate'
+        # Rule: PER --[collaboratesWith]--> ORG
+        # "Elle collabore avec des chercheurs de Casablanca."
+        # ================================================================
+        if lemma in ("collaborer", "collaborate"):
+            subject_text = None
+            for child in token.children:
+                if child.dep_ in ("nsubj", "nsubjpass"):
+                    subject_text = _resolve_entity_text(child)
+                    if subject_text:
+                        break
+            # Pronoun coreference fallback: pick the first PER entity in text
+            if not subject_text or not entity_uris.get(subject_text):
+                for ent_text, ent_uri in entity_uris.items():
+                    if (ent_uri, RDF.type, FOAF.Person) in graph:
+                        subject_text = ent_text
+                        break
+            if not subject_text:
+                continue
+            subject_uri = entity_uris.get(subject_text)
+            if not subject_uri:
+                continue
+            if (subject_uri, RDF.type, FOAF.Person) not in graph:
+                continue
+
+            # Walk obl/obl:mod/prep + ADP → object
+            obj_found = False
+            for child in token.children:
+                if child.dep_ in ("obl", "obl:mod", "obl:arg", "nmod"):
+                    obj_text = _resolve_entity_text(child)
+                    if obj_text:
+                        obj_uri = entity_uris.get(obj_text)
+                        if obj_uri and any(
+                            (obj_uri, RDF.type, cls) in graph
+                            for cls in (SCHEMA.Organization, SCHEMA.Place, EX.Document)
+                        ):
+                            graph.add((subject_uri, EX.collaboratesWith, obj_uri))
+                            print(f"  ✓ collaborer (obl) → {subject_text} --[collaboratesWith]--> {obj_text}")
+                            verb_relations_added += 1
+                            obj_found = True
+                if child.pos_ == "ADP":
+                    for grandchild in child.children:
+                        if grandchild.dep_ in ("pobj", "obj", "nmod"):
+                            obj_text = _resolve_entity_text(grandchild)
+                            if obj_text:
+                                obj_uri = entity_uris.get(obj_text)
+                                if obj_uri and any(
+                                    (obj_uri, RDF.type, cls) in graph
+                                    for cls in (SCHEMA.Organization, SCHEMA.Place,
+                                                EX.Document)
+                                ):
+                                    graph.add((subject_uri, EX.collaboratesWith, obj_uri))
+                                    print(f"  ✓ collaborer (prep) → {subject_text} --[collaboratesWith]--> {obj_text}")
+                                    verb_relations_added += 1
+                                    obj_found = True
+
+            # Positional fallback: first ORG/LOC after the verb
+            if not obj_found:
+                verb_pos = token.i
+                for ent_text, ent_uri in entity_uris.items():
+                    if ent_text == subject_text:
+                        continue
+                    if not any(
+                        (ent_uri, RDF.type, cls) in graph
+                        for cls in (SCHEMA.Organization, SCHEMA.Place, EX.Document)
+                    ):
+                        continue
+                    tok_positions = [t.i for t in doc if t.text in ent_text.split()]
+                    if tok_positions and min(tok_positions) > verb_pos:
+                        graph.add((subject_uri, EX.collaboratesWith, ent_uri))
+                        print(f"  ✓ collaborer (pos-fallback) → {subject_text} --[collaboratesWith]--> {ent_text}")
+                        verb_relations_added += 1
+                        break
+            continue  # done with this collaborer token
 
         # ================================================================
         # TASK 2+3: DEP-PARSE DISPATCH FOR 'utiliser' / 'use'
