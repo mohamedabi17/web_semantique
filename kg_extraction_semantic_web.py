@@ -228,8 +228,17 @@ def define_tbox(graph):
     graph.add((EX.relatedTo, RDFS.range, RDFS.Resource))
     graph.add((EX.relatedTo, RDFS.comment, 
                Literal("Relation générique entre deux ressources", lang="fr")))
-    
-    print("  ✓ ObjectProperties définies : ex:teachesSubject, ex:author, ex:worksAt, ex:locatedIn, ex:collaboratesWith, ex:studiesAt, ex:manages, ex:relatedTo")
+
+    # Propriété : Un topic/concept utilise un autre topic/standard
+    # domain = ex:Document (TOPIC)  range = ex:Document (TOPIC)
+    graph.add((EX.uses, RDF.type, OWL.ObjectProperty))
+    graph.add((EX.uses, RDFS.label, Literal("utilise", lang="fr")))
+    graph.add((EX.uses, RDFS.domain, EX.Document))
+    graph.add((EX.uses, RDFS.range, EX.Document))
+    graph.add((EX.uses, RDFS.comment,
+               Literal("Relation entre un concept et un standard/technologie qu'il utilise", lang="fr")))
+
+    print("  ✓ ObjectProperties définies : ex:teachesSubject, ex:author, ex:worksAt, ex:locatedIn, ex:collaboratesWith, ex:studiesAt, ex:manages, ex:relatedTo, ex:uses")
     
     # -----------------------------------------------------------------------
     # 2.3 PROPRIÉTÉS DE DONNÉES (owl:DatatypeProperty)
@@ -401,13 +410,14 @@ Admissible relations for ({entity1_type} → {entity2_type}):
 - PER → LOC    : locatedIn, relatedTo
 - PER → PER    : collaboratesWith, relatedTo
 - ORG → LOC    : locatedIn, relatedTo
+- TOPIC → TOPIC : uses, relatedTo
 (other combinations → relatedTo or NO_VALID_RELATIONS)
 
 ========================
 OUTPUT (ONE WORD ONLY)
 ========================
 
-teachesSubject | teaches | author | worksAt | locatedIn | collaboratesWith | studiesAt | manages | relatedTo | NO_VALID_RELATIONS
+teachesSubject | teaches | author | worksAt | locatedIn | collaboratesWith | studiesAt | manages | uses | relatedTo | NO_VALID_RELATIONS
 
 No explanations."""
 
@@ -444,6 +454,9 @@ No explanations."""
             "collaborates_with":       "collaboratesWith",
             "studiesat":        "studiesAt",
             "studies_at":       "studiesAt",
+            "uses":             "uses",
+            "utilise":          "uses",
+            "utiliser":         "uses",
         }
         relation = _llm_aliases.get(relation.lower(), relation)
         
@@ -662,7 +675,7 @@ No explanations."""
         
         # Liste des relations valides
         valid_relations = ["teachesSubject", "author", "worksAt", "locatedIn",
-                          "collaboratesWith", "studiesAt", "manages", "relatedTo"]
+                          "collaboratesWith", "studiesAt", "manages", "uses", "relatedTo"]
         if relation not in valid_relations:
             relation = "relatedTo"
 
@@ -1137,150 +1150,241 @@ def extract_relations(graph, entity_uris, text):
                 return key
         return None
 
+    # Surface forms that spaCy fr_core_news_sm mislabels as NOUN instead of VERB.
+    # We explicitly catch these to ensure the verb-dispatch pipeline fires.
+    _VERBAL_SURFACE_MAP = {
+        "utilise": "utiliser", "utilises": "utiliser", "utilisent": "utiliser",
+        "permet": "permettre", "permets": "permettre",
+        "définit": "définir",  "décrit": "décrire",
+    }
+
     for token in doc:
-        if token.pos_ == "VERB":
+        # Accept genuine VERBs + known verbal surface forms mislabeled as NOUN
+        _is_verbal_noun = (
+            token.pos_ == "NOUN"
+            and token.text.lower() in _VERBAL_SURFACE_MAP
+        )
+        if token.pos_ != "VERB" and not _is_verbal_noun:
+            continue
+        # For mislabeled NOUN: use surface→lemma map; for real VERB: use spaCy lemma
+        if _is_verbal_noun:
+            lemma = _VERBAL_SURFACE_MAP[token.text.lower()]
+        else:
             lemma = token.lemma_.lower()
 
-            # ================================================================
-            # TYPE-AWARE DISPATCH FOR 'enseigner' / 'teach'
-            # Rule:
-            #   PER --[teachesSubject]--> TOPIC/Document  (grammatical dobj)
-            #   PER --[worksAt]-->        ORG              (oblique / prep obj)
-            # ================================================================
-            if lemma in ("enseigner", "teach"):
-                # Find subject
-                subject_text = None
-                for child in token.children:
-                    if child.dep_ in ("nsubj", "nsubjpass"):
-                        subject_text = _resolve_entity_text(child)
-                        if subject_text:
-                            break
-
-                if not subject_text:
-                    continue
-                subject_uri = entity_uris.get(subject_text)
-                if not subject_uri:
-                    continue
-                if (subject_uri, RDF.type, FOAF.Person) not in graph:
-                    continue
-
-                # Direct object → teachesSubject (TOPIC/Document)
-                for child in token.children:
-                    if child.dep_ in ("dobj", "obj", "attr"):
-                        obj_text = _resolve_entity_text(child)
-                        if obj_text:
-                            obj_uri = entity_uris.get(obj_text)
-                            if obj_uri and (
-                                (obj_uri, RDF.type, EX.Document) in graph or
-                                (obj_uri, RDF.type, EX.Topic)    in graph
-                            ):
-                                graph.add((subject_uri, EX.teachesSubject, obj_uri))
-                                print(f"  ✓ enseigner (dobj) → {subject_text} --[teachesSubject]--> {obj_text}")
-                                verb_relations_added += 1
-                                ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                    subject_uri, EX.teachesSubject, obj_uri,
-                                    confidence=0.85, source="verb_lemma_mapping")
-                        break
-
-                # Oblique / prepositional object → worksAt (ORG)
-                for child in token.children:
-                    if child.dep_ in ("obl", "obl:mod", "obl:arg", "nmod", "prep"):
-                        obj_text = _resolve_entity_text(child)
-                        if obj_text:
-                            obj_uri = entity_uris.get(obj_text)
-                            if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
-                                graph.add((subject_uri, EX.worksAt, obj_uri))
-                                print(f"  ✓ enseigner (obl) → {subject_text} --[worksAt]--> {obj_text}")
-                                verb_relations_added += 1
-                                ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                    subject_uri, EX.worksAt, obj_uri,
-                                    confidence=0.85, source="verb_lemma_mapping")
-                    # Also walk ADP → pobj (e.g. "à" → "Université de Versailles")
-                    if child.pos_ == "ADP" and child.lower_ in _AT_PREPS:
-                        for grandchild in child.children:
-                            if grandchild.dep_ in ("pobj", "obj", "nmod"):
-                                obj_text = _resolve_entity_text(grandchild)
-                                if obj_text:
-                                    obj_uri = entity_uris.get(obj_text)
-                                    if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
-                                        graph.add((subject_uri, EX.worksAt, obj_uri))
-                                        print(f"  ✓ enseigner (prep) → {subject_text} --[worksAt]--> {obj_text}")
-                                        verb_relations_added += 1
-                                        ConfidenceScorer(graph, verbose=False).add_relation_confidence(
-                                            subject_uri, EX.worksAt, obj_uri,
-                                            confidence=0.85, source="verb_lemma_mapping")
-
-                # Positional fallback: dep parse missed the objects — scan by type
-                already_linked = set(graph.objects(subject_uri, EX.teachesSubject)) | \
-                                 set(graph.objects(subject_uri, EX.worksAt))
-                if not already_linked:
-                    verb_pos = token.i
-                    for ent_text, ent_uri in entity_uris.items():
-                        if ent_text == subject_text:
-                            continue
-                        ent_after = any(t.i > verb_pos for t in doc if t.text in ent_text.split())
-                        if not ent_after:
-                            continue
-                        if (ent_uri, RDF.type, EX.Document) in graph or \
-                           (ent_uri, RDF.type, EX.Topic) in graph:
-                            graph.add((subject_uri, EX.teachesSubject, ent_uri))
-                            print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[teachesSubject]--> {ent_text}")
-                            verb_relations_added += 1
-                        elif (ent_uri, RDF.type, SCHEMA.Organization) in graph:
-                            graph.add((subject_uri, EX.worksAt, ent_uri))
-                            print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[worksAt]--> {ent_text}")
-                            verb_relations_added += 1
-                continue  # done with this enseigner token
-
-            # ================================================================
-            # Standard single-property dispatch for other verbs
-            # ================================================================
-            if lemma not in verb_mapping:
-                continue
-
-            property_name, domain_class, range_class = verb_mapping[lemma]
-
-            # Heuristique : sujet avant le verbe, objet après le verbe
+        # ================================================================
+        # TYPE-AWARE DISPATCH FOR 'enseigner' / 'teach'
+        # Rule:
+        #   PER --[teachesSubject]--> TOPIC/Document  (grammatical dobj)
+        #   PER --[worksAt]-->        ORG              (oblique / prep obj)
+        # ================================================================
+        if lemma in ("enseigner", "teach"):
+            # Find subject
             subject_text = None
-            object_text = None
-
-            # Chercher le sujet (nsubj)
             for child in token.children:
-                if child.dep_ in ["nsubj", "nsubjpass"]:
+                if child.dep_ in ("nsubj", "nsubjpass"):
                     subject_text = _resolve_entity_text(child)
                     if subject_text:
                         break
 
-            # Chercher l'objet (dobj, attr)
+            if not subject_text:
+                continue
+            subject_uri = entity_uris.get(subject_text)
+            if not subject_uri:
+                continue
+            if (subject_uri, RDF.type, FOAF.Person) not in graph:
+                continue
+
+            # Direct object → teachesSubject (TOPIC/Document)
             for child in token.children:
-                if child.dep_ in ["dobj", "obj", "attr", "obl"]:
-                    object_text = _resolve_entity_text(child)
-                    if object_text:
+                if child.dep_ in ("dobj", "obj", "attr"):
+                    obj_text = _resolve_entity_text(child)
+                    if obj_text:
+                        obj_uri = entity_uris.get(obj_text)
+                        if obj_uri and (
+                            (obj_uri, RDF.type, EX.Document) in graph or
+                            (obj_uri, RDF.type, EX.Topic)    in graph
+                        ):
+                            graph.add((subject_uri, EX.teachesSubject, obj_uri))
+                            print(f"  ✓ enseigner (dobj) → {subject_text} --[teachesSubject]--> {obj_text}")
+                            verb_relations_added += 1
+                            ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                subject_uri, EX.teachesSubject, obj_uri,
+                                confidence=0.85, source="verb_lemma_mapping")
+                    break
+
+            # Oblique / prepositional object → worksAt (ORG)
+            for child in token.children:
+                if child.dep_ in ("obl", "obl:mod", "obl:arg", "nmod", "prep"):
+                    obj_text = _resolve_entity_text(child)
+                    if obj_text:
+                        obj_uri = entity_uris.get(obj_text)
+                        if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                            graph.add((subject_uri, EX.worksAt, obj_uri))
+                            print(f"  ✓ enseigner (obl) → {subject_text} --[worksAt]--> {obj_text}")
+                            verb_relations_added += 1
+                            ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                subject_uri, EX.worksAt, obj_uri,
+                                confidence=0.85, source="verb_lemma_mapping")
+                # Also walk ADP → pobj (e.g. "à" → "Université de Versailles")
+                if child.pos_ == "ADP" and child.lower_ in _AT_PREPS:
+                    for grandchild in child.children:
+                        if grandchild.dep_ in ("pobj", "obj", "nmod"):
+                            obj_text = _resolve_entity_text(grandchild)
+                            if obj_text:
+                                obj_uri = entity_uris.get(obj_text)
+                                if obj_uri and (obj_uri, RDF.type, SCHEMA.Organization) in graph:
+                                    graph.add((subject_uri, EX.worksAt, obj_uri))
+                                    print(f"  ✓ enseigner (prep) → {subject_text} --[worksAt]--> {obj_text}")
+                                    verb_relations_added += 1
+                                    ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                                        subject_uri, EX.worksAt, obj_uri,
+                                        confidence=0.85, source="verb_lemma_mapping")
+
+            # Positional fallback: dep parse missed the objects — scan by type
+            already_linked = set(graph.objects(subject_uri, EX.teachesSubject)) | \
+                             set(graph.objects(subject_uri, EX.worksAt))
+            if not already_linked:
+                verb_pos = token.i
+                for ent_text, ent_uri in entity_uris.items():
+                    if ent_text == subject_text:
+                        continue
+                    ent_after = any(t.i > verb_pos for t in doc if t.text in ent_text.split())
+                    if not ent_after:
+                        continue
+                    if (ent_uri, RDF.type, EX.Document) in graph or \
+                       (ent_uri, RDF.type, EX.Topic) in graph:
+                        graph.add((subject_uri, EX.teachesSubject, ent_uri))
+                        print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[teachesSubject]--> {ent_text}")
+                        verb_relations_added += 1
+                    elif (ent_uri, RDF.type, SCHEMA.Organization) in graph:
+                        graph.add((subject_uri, EX.worksAt, ent_uri))
+                        print(f"  ✓ enseigner (pos-fallback) → {subject_text} --[worksAt]--> {ent_text}")
+                        verb_relations_added += 1
+            continue  # done with this enseigner token
+
+        # ================================================================
+        # TASK 2+3: DEP-PARSE DISPATCH FOR 'utiliser' / 'use'
+        # Rule: TOPIC --[uses]--> TOPIC
+        # "Le Web Sémantique utilise RDF et OWL"
+        # ================================================================
+        if lemma in ("utiliser", "use", "utilise"):
+            # Find subject
+            subject_text = None
+            for child in token.children:
+                if child.dep_ in ("nsubj", "nsubjpass"):
+                    subject_text = _resolve_entity_text(child)
+                    if subject_text:
                         break
 
-            # Si sujet et objet trouvés, créer la relation
-            if subject_text and object_text:
-                subject_uri = entity_uris.get(subject_text)
-                object_uri = entity_uris.get(object_text)
+            if not subject_text:
+                # positional fallback: first entity before verb position
+                verb_pos = token.i
+                for ent_text in entity_uris:
+                    tok_positions = [t.i for t in doc if t.text in ent_text.split()]
+                    if tok_positions and max(tok_positions) < verb_pos:
+                        subject_text = ent_text
+                        break
 
-                if subject_uri and object_uri:
-                    # Vérification domain/range
-                    domain_valid = (subject_uri, RDF.type, domain_class) in graph
-                    range_valid = (object_uri, RDF.type, range_class) in graph
+            if not subject_text:
+                continue
+            subject_uri = entity_uris.get(subject_text)
+            if not subject_uri:
+                continue
+            # Only TOPIC subjects are valid for 'uses'
+            if (subject_uri, RDF.type, EX.Document) not in graph:
+                continue
 
-                    if domain_valid and range_valid:
-                        relation_prop = getattr(EX, property_name)
-                        graph.add((subject_uri, relation_prop, object_uri))
-                        print(f"  ✓ Verbe '{token.text}' → {subject_text} --[{property_name}]--> {object_text}")
+            # Collect direct objects + coordinated objects (et/and)
+            obj_tokens = []
+            for child in token.children:
+                if child.dep_ in ("dobj", "obj", "attr"):
+                    obj_tokens.append(child)
+                    # Walk coordination: "RDF et OWL" — conj children of dobj
+                    for conj in child.children:
+                        if conj.dep_ == "conj":
+                            obj_tokens.append(conj)
+
+            # Positional fallback: all TOPIC entities after the verb
+            if not obj_tokens:
+                verb_pos = token.i
+                for ent_text, ent_uri in entity_uris.items():
+                    if ent_text == subject_text:
+                        continue
+                    if (ent_uri, RDF.type, EX.Document) not in graph:
+                        continue
+                    tok_positions = [t.i for t in doc if t.text in ent_text.split()]
+                    if tok_positions and min(tok_positions) > verb_pos:
+                        graph.add((subject_uri, EX.uses, ent_uri))
+                        print(f"  ✓ utiliser (pos-fallback) → {subject_text} --[uses]--> {ent_text}")
                         verb_relations_added += 1
+                        ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                            subject_uri, EX.uses, ent_uri,
+                            confidence=0.88, source="dep_parse_utiliser")
+                continue
 
-                        # Ajout confiance pour cette relation
-                        confidence_scorer = ConfidenceScorer(graph, verbose=False)
-                        confidence_scorer.add_relation_confidence(
-                            subject_uri, relation_prop, object_uri,
-                            confidence=0.80,  # Confiance moyenne (heuristique verbale)
-                            source="verb_lemma_mapping"
-                        )
+            for obj_tok in obj_tokens:
+                obj_text = _resolve_entity_text(obj_tok)
+                if not obj_text:
+                    continue
+                obj_uri = entity_uris.get(obj_text)
+                if not obj_uri:
+                    continue
+                if (obj_uri, RDF.type, EX.Document) not in graph:
+                    continue
+                graph.add((subject_uri, EX.uses, obj_uri))
+                print(f"  ✓ utiliser (dobj) → {subject_text} --[uses]--> {obj_text}")
+                verb_relations_added += 1
+                ConfidenceScorer(graph, verbose=False).add_relation_confidence(
+                    subject_uri, EX.uses, obj_uri,
+                    confidence=0.88, source="dep_parse_utiliser")
+            continue  # done with this utiliser token
+        if lemma not in verb_mapping:
+            continue
+
+        property_name, domain_class, range_class = verb_mapping[lemma]
+
+        # Heuristique : sujet avant le verbe, objet après le verbe
+        subject_text = None
+        object_text = None
+
+        # Chercher le sujet (nsubj)
+        for child in token.children:
+            if child.dep_ in ["nsubj", "nsubjpass"]:
+                subject_text = _resolve_entity_text(child)
+                if subject_text:
+                    break
+
+        # Chercher l'objet (dobj, attr)
+        for child in token.children:
+            if child.dep_ in ["dobj", "obj", "attr", "obl"]:
+                object_text = _resolve_entity_text(child)
+                if object_text:
+                    break
+
+        # Si sujet et objet trouvés, créer la relation
+        if subject_text and object_text:
+            subject_uri = entity_uris.get(subject_text)
+            object_uri = entity_uris.get(object_text)
+
+            if subject_uri and object_uri:
+                # Vérification domain/range
+                domain_valid = (subject_uri, RDF.type, domain_class) in graph
+                range_valid = (object_uri, RDF.type, range_class) in graph
+
+                if domain_valid and range_valid:
+                    relation_prop = getattr(EX, property_name)
+                    graph.add((subject_uri, relation_prop, object_uri))
+                    print(f"  ✓ Verbe '{token.text}' → {subject_text} --[{property_name}]--> {object_text}")
+                    verb_relations_added += 1
+
+                    # Ajout confiance pour cette relation
+                    confidence_scorer = ConfidenceScorer(graph, verbose=False)
+                    confidence_scorer.add_relation_confidence(
+                        subject_uri, relation_prop, object_uri,
+                        confidence=0.80,  # Confiance moyenne (heuristique verbale)
+                        source="verb_lemma_mapping"
+                    )
     
     if verb_relations_added > 0:
         print(f"✅ {verb_relations_added} relation(s) inférée(s) via mapping verbes")
@@ -1313,14 +1417,14 @@ def extract_relations(graph, entity_uris, text):
         ("ORG", "ORG"):    ["collaboratesWith", "relatedTo"],
         ("ORG", "PER"):    [],           # no valid OWL property in this direction
         ("ORG", "TOPIC"):  [],           # no valid OWL property
-        ("TOPIC", "TOPIC"):["relatedTo"],
+        ("TOPIC", "TOPIC"):["uses", "relatedTo"],
         ("TOPIC", "ORG"):  [],           # no valid OWL property
         ("TOPIC", "PER"):  [],
         ("LOC", "LOC"):    ["locatedIn"],
         # UNK: type could not be resolved — allow all, priority logic will decide
         ("PER", "UNK"):    ["teachesSubject", "author", "worksAt", "manages",
                             "studiesAt", "collaboratesWith", "locatedIn"],
-        ("UNK", "TOPIC"):  ["teachesSubject", "author", "relatedTo"],
+        ("UNK", "TOPIC"):  ["teachesSubject", "author", "uses", "relatedTo"],
         ("UNK", "ORG"):    ["worksAt", "manages", "studiesAt"],
         ("UNK", "LOC"):    ["locatedIn"],
         ("UNK", "UNK"):    [],
@@ -1342,7 +1446,7 @@ def extract_relations(graph, entity_uris, text):
 
     # Collect pairs already handled by Layer 7 (verb dispatch) to avoid duplication
     _layer7_covered = set()
-    for prop in (EX.teachesSubject, EX.worksAt, EX.author, EX.manages, EX.studiesAt):
+    for prop in (EX.teachesSubject, EX.worksAt, EX.author, EX.manages, EX.studiesAt, EX.uses):
         for s, _, o in graph.triples((None, prop, None)):
             _layer7_covered.add((str(s), str(o)))
 
@@ -1404,6 +1508,7 @@ def extract_relations(graph, entity_uris, text):
                 "collaboratesWith": (EX.collaboratesWith, FOAF.Person, FOAF.Person),
                 "studiesAt": (EX.studiesAt, FOAF.Person, SCHEMA.Organization),
                 "manages": (EX.manages, FOAF.Person, SCHEMA.Organization),
+                "uses": (EX.uses, EX.Document, EX.Document),   # TOPIC uses TOPIC
                 "relatedTo": (EX.relatedTo, None, None)
             }
             
@@ -1441,6 +1546,20 @@ def extract_relations(graph, entity_uris, text):
                         print(f"  ⚠️ worksAt rejeté : {entity1_text} n'est pas une Person")
                     if not range_valid:
                         print(f"  ⚠️ worksAt rejeté : {entity2_text} n'est pas une Organisation")
+                continue
+
+            # TASK 3+4: fast-path for ex:uses — strict TOPIC→TOPIC validation
+            if relation_type == "uses":
+                domain_valid = (entity1_uri, RDF.type, EX.Document) in graph
+                range_valid  = (entity2_uri, RDF.type, EX.Document) in graph
+                if domain_valid and range_valid:
+                    graph.add((entity1_uri, EX.uses, entity2_uri))
+                    print(f"  ✓ Relation LLM : {entity1_text} --[uses]--> {entity2_text}")
+                else:
+                    if not domain_valid:
+                        print(f"  ⚠️ uses rejeté : {entity1_text} n'est pas un Topic/Document")
+                    if not range_valid:
+                        print(f"  ⚠️ uses rejeté : {entity2_text} n'est pas un Topic/Document")
                 continue
             
             # VALIDATION FLEXIBLE AVEC TYPAGE ADAPTATIF ET MULTIPLES TYPES ACCEPTÉS

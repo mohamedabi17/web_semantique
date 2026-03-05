@@ -225,22 +225,22 @@ def test_related_to_rdf_owl(nlp, results: List[RelationTestResult]) -> None:
     """
     Input    : Le Web Sémantique utilise RDF et OWL.
     Expected :
-        Web_Semantique --[relatedTo]--> RDF
-        Web_Semantique --[relatedTo]--> OWL
+        Web_Semantique --[uses]--> RDF
+        Web_Semantique --[uses]--> OWL
     """
     sentence = "Le Web Sémantique utilise RDF et OWL."
     print(f"\n{'='*70}")
-    print(f"TEST 4 — relatedTo (TOPIC↔TOPIC)")
+    print(f"TEST 4 — uses (TOPIC↔TOPIC)")
     print(f"Input  : {sentence}")
     print(f"{'='*70}")
 
     g = run_pipeline(sentence, nlp)
 
     check_triple(g,
-                 "Web Sémantique", EX_NS.relatedTo, "RDF",
+                 "Web Sémantique", EX_NS.uses, "RDF",
                  sentence, results)
     check_triple(g,
-                 "Web Sémantique", EX_NS.relatedTo, "OWL",
+                 "Web Sémantique", EX_NS.uses, "OWL",
                  sentence, results)
 
 

@@ -783,6 +783,19 @@ class HybridNERModule:
             "département", "center", "centre", "research", "national",
             "inria", "cnrs", "mit", "stanford",
         ])
+        # Stopword prefixes that can never begin a person name.
+        # e.g. "Le Web" → first token "Le" is a stopword → reject.
+        _PERSON_STOPWORD_PREFIXES = frozenset([
+            "le", "la", "les", "un", "une", "des", "du", "de", "d",
+            "l", "ce", "cet", "cette", "ces", "mon", "son", "sa", "ses",
+            "the", "a", "an",
+        ])
+        # Topic / tech words: if either token is one of these, reject PER.
+        _PERSON_TOPIC_WORDS = frozenset([
+            "web", "rdf", "owl", "sparql", "rdfs", "json", "turtle",
+            "ontology", "ontologie", "database", "graph", "semantic",
+            "sémantique", "framework", "protocol", "standard",
+        ])
         bare_re = re.compile(
             r'(?<!\w)([A-ZÀÂÉÈÊÙÛÎÔŒÆÇ][a-zàâéèêùûîôœæç]{1,})'
             r'\s+([A-ZÀÂÉÈÊÙÛÎÔŒÆÇ][a-zàâéèêùûîôœæç]{1,})(?!\w)'
@@ -791,6 +804,12 @@ class HybridNERModule:
             first, last = m.group(1), m.group(2)
             full = f"{first} {last}"
             tl = full.lower()
+            # Reject if first token is a French/English stopword (e.g. "Le Web")
+            if first.lower() in _PERSON_STOPWORD_PREFIXES:
+                continue
+            # Reject if any token is a known tech/topic word (e.g. "Web Sémantique")
+            if first.lower() in _PERSON_TOPIC_WORDS or last.lower() in _PERSON_TOPIC_WORDS:
+                continue
             if any(kw in tl for kw in self.TECH_CONCEPT_KEYWORDS):
                 continue
             if any(w in tl for w in _ORG_WORDS):
