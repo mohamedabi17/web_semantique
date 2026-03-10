@@ -1,0 +1,1442 @@
+{
+  "benchmark_meta": {
+    "name": "Robustness Benchmark — Neuro-Symbolic KG Extraction",
+    "version": "1.0",
+    "date": "2026-03-04",
+    "description": "Stress-test suite for NER and relation extraction generalisation. 56 sentences across 7 categories.",
+    "categories": [
+      "org_detection",
+      "topic_generalization",
+      "short_acronym",
+      "multi_entity",
+      "ambiguous_context",
+      "noise_robustness",
+      "long_academic"
+    ],
+    "entity_type_map": {
+      "Person": "PER",
+      "Organization": "ORG",
+      "Topic": "TOPIC",
+      "Location": "LOC",
+      "Document": "DOCUMENT"
+    }
+  },
+  "tests": [
+    // ======================================================================
+    // CATEGORY 1 — Organization Detection (8 sentences)
+    // Goal: vary org-name structure: "Université de X", "X University",
+    //       "Centre/Institut/Lab de X", all-caps acronym orgs.
+    // ======================================================================
+    {
+      "id": "ORG_001",
+      "category": "org_detection",
+      "description": "Simple French university with ADP connector",
+      "text": "Marie Dupont travaille à l'Université de Lyon.",
+      "expected_entities": [
+        {
+          "text": "Marie Dupont",
+          "type": "PER"
+        },
+        {
+          "text": "Université de Lyon",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Marie Dupont",
+          "predicate": "worksAt",
+          "object": "Université de Lyon"
+        }
+      ]
+    },
+    {
+      "id": "ORG_002",
+      "category": "org_detection",
+      "description": "English university with 'of' connector",
+      "text": "John Smith teaches at the University of Cambridge.",
+      "expected_entities": [
+        {
+          "text": "John Smith",
+          "type": "PER"
+        },
+        {
+          "text": "University of Cambridge",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "John Smith",
+          "predicate": "worksAt",
+          "object": "University of Cambridge"
+        }
+      ]
+    },
+    {
+      "id": "ORG_003",
+      "category": "org_detection",
+      "description": "Research centre with long compound name",
+      "text": "Pierre Martin dirige le Centre de Recherche en Informatique de Bordeaux.",
+      "expected_entities": [
+        {
+          "text": "Pierre Martin",
+          "type": "PER"
+        },
+        {
+          "text": "Centre de Recherche en Informatique de Bordeaux",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Pierre Martin",
+          "predicate": "manages",
+          "object": "Centre de Recherche en Informatique de Bordeaux"
+        }
+      ]
+    },
+    {
+      "id": "ORG_004",
+      "category": "org_detection",
+      "description": "Hyphenated university name (should NOT fragment at hyphen)",
+      "text": "Le laboratoire de l'Université Paris-Saclay publie ses résultats.",
+      "expected_entities": [
+        {
+          "text": "Université Paris-Saclay",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ORG_005",
+      "category": "org_detection",
+      "description": "Institute with English-style name",
+      "text": "Dr. Ahmed Bensalem is affiliated with the Massachusetts Institute of Technology.",
+      "expected_entities": [
+        {
+          "text": "Dr. Ahmed Bensalem",
+          "type": "PER"
+        },
+        {
+          "text": "Massachusetts Institute of Technology",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Ahmed Bensalem",
+          "predicate": "worksAt",
+          "object": "Massachusetts Institute of Technology"
+        }
+      ]
+    },
+    {
+      "id": "ORG_006",
+      "category": "org_detection",
+      "description": "École with accented name",
+      "text": "Fatima Zahra Belkadi enseigne à l'École Nationale Supérieure d'Informatique.",
+      "expected_entities": [
+        {
+          "text": "Fatima Zahra Belkadi",
+          "type": "PER"
+        },
+        {
+          "text": "École Nationale Supérieure d'Informatique",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Fatima Zahra Belkadi",
+          "predicate": "worksAt",
+          "object": "École Nationale Supérieure d'Informatique"
+        }
+      ]
+    },
+    {
+      "id": "ORG_007",
+      "category": "org_detection",
+      "description": "All-caps acronym organisation",
+      "text": "Les chercheurs de l'INRIA travaillent sur les graphes de connaissances.",
+      "expected_entities": [
+        {
+          "text": "INRIA",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ORG_008",
+      "category": "org_detection",
+      "description": "Department-level organisation (English)",
+      "text": "Prof. Li Wei heads the Department of Computer Science at Stanford University.",
+      "expected_entities": [
+        {
+          "text": "Prof. Li Wei",
+          "type": "PER"
+        },
+        {
+          "text": "Department of Computer Science",
+          "type": "ORG"
+        },
+        {
+          "text": "Stanford University",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Li Wei",
+          "predicate": "manages",
+          "object": "Department of Computer Science"
+        }
+      ]
+    },
+    // ======================================================================
+    // CATEGORY 2 — Topic Generalisation (8 sentences)
+    // Goal: topics NOT in the keyword list; system must infer TOPIC from
+    //       context (teaching verb, academic framing) rather than keyword match.
+    // ======================================================================
+    {
+      "id": "TOP_001",
+      "category": "topic_generalization",
+      "description": "Teaching verb + unseen math topic",
+      "text": "Prof. Martin enseigne Algebra linéaire au semestre.",
+      "expected_entities": [
+        {
+          "text": "Prof. Martin",
+          "type": "PER"
+        },
+        {
+          "text": "Algebra linéaire",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Martin",
+          "predicate": "teachesSubject",
+          "object": "Algebra linéaire"
+        }
+      ]
+    },
+    {
+      "id": "TOP_002",
+      "category": "topic_generalization",
+      "description": "Study verb + compound topic not in keywords",
+      "text": "Dr. Dupont étudie la Fouille de Données Temporelles.",
+      "expected_entities": [
+        {
+          "text": "Dr. Dupont",
+          "type": "PER"
+        },
+        {
+          "text": "Fouille de Données Temporelles",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Dupont",
+          "predicate": "studies",
+          "object": "Fouille de Données Temporelles"
+        }
+      ]
+    },
+    {
+      "id": "TOP_003",
+      "category": "topic_generalization",
+      "description": "Present verb + unseen CS topic",
+      "text": "Le professeur présente Graph Algorithms et leurs applications.",
+      "expected_entities": [
+        {
+          "text": "Graph Algorithms",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "TOP_004",
+      "category": "topic_generalization",
+      "description": "Teach verb + two unseen topics",
+      "text": "Sarah Connor teaches Distributed Systems and Parallel Computing.",
+      "expected_entities": [
+        {
+          "text": "Sarah Connor",
+          "type": "PER"
+        },
+        {
+          "text": "Distributed Systems",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Parallel Computing",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Sarah Connor",
+          "predicate": "teachesSubject",
+          "object": "Distributed Systems"
+        },
+        {
+          "subject": "Sarah Connor",
+          "predicate": "teachesSubject",
+          "object": "Parallel Computing"
+        }
+      ]
+    },
+    {
+      "id": "TOP_005",
+      "category": "topic_generalization",
+      "description": "Course framing implies TOPIC without teaching verb",
+      "text": "Le cours de Sécurité Informatique est dispensé chaque année.",
+      "expected_entities": [
+        {
+          "text": "Sécurité Informatique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "TOP_006",
+      "category": "topic_generalization",
+      "description": "Research verb + completely novel topic",
+      "text": "Dr. Al-Rashid research Quantum Error Correction.",
+      "expected_entities": [
+        {
+          "text": "Dr. Al-Rashid",
+          "type": "PER"
+        },
+        {
+          "text": "Quantum Error Correction",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Al-Rashid",
+          "predicate": "studies",
+          "object": "Quantum Error Correction"
+        }
+      ]
+    },
+    {
+      "id": "TOP_007",
+      "category": "topic_generalization",
+      "description": "French teaching verb + English topic name",
+      "text": "Prof. Nguyen enseigne Formal Verification aux étudiants de master.",
+      "expected_entities": [
+        {
+          "text": "Prof. Nguyen",
+          "type": "PER"
+        },
+        {
+          "text": "Formal Verification",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Nguyen",
+          "predicate": "teachesSubject",
+          "object": "Formal Verification"
+        }
+      ]
+    },
+    {
+      "id": "TOP_008",
+      "category": "topic_generalization",
+      "description": "Single-word domain topic without keyword",
+      "text": "Prof. Hassan enseigne Bioinformatique en licence.",
+      "expected_entities": [
+        {
+          "text": "Prof. Hassan",
+          "type": "PER"
+        },
+        {
+          "text": "Bioinformatique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Hassan",
+          "predicate": "teachesSubject",
+          "object": "Bioinformatique"
+        }
+      ]
+    },
+    // ======================================================================
+    // CATEGORY 3 — Short Acronym Detection (8 sentences)
+    // Goal: AI / ML / DL / NLP / KG / CV / GL tagged as TOPIC, not PER.
+    // ======================================================================
+    {
+      "id": "ACR_001",
+      "category": "short_acronym",
+      "description": "Teaching verb before AI acronym",
+      "text": "Dr. Martin enseigne AI dans le module d'introduction.",
+      "expected_entities": [
+        {
+          "text": "Dr. Martin",
+          "type": "PER"
+        },
+        {
+          "text": "AI",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Martin",
+          "predicate": "teachesSubject",
+          "object": "AI"
+        }
+      ]
+    },
+    {
+      "id": "ACR_002",
+      "category": "short_acronym",
+      "description": "Works on NLP (no teaching verb)",
+      "text": "Prof. Smith travaille sur NLP et ses applications en médecine.",
+      "expected_entities": [
+        {
+          "text": "Prof. Smith",
+          "type": "PER"
+        },
+        {
+          "text": "NLP",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ACR_003",
+      "category": "short_acronym",
+      "description": "Two acronyms in one sentence",
+      "text": "Le cours porte sur KG et RDF.",
+      "expected_entities": [
+        {
+          "text": "KG",
+          "type": "TOPIC"
+        },
+        {
+          "text": "RDF",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ACR_004",
+      "category": "short_acronym",
+      "description": "ML and DL side by side — should both be TOPIC, not PER",
+      "text": "Le programme couvre ML, DL et CV.",
+      "expected_entities": [
+        {
+          "text": "ML",
+          "type": "TOPIC"
+        },
+        {
+          "text": "DL",
+          "type": "TOPIC"
+        },
+        {
+          "text": "CV",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ACR_005",
+      "category": "short_acronym",
+      "description": "GL in French CS context",
+      "text": "Dr. Benali enseigne GL et les méthodes agiles.",
+      "expected_entities": [
+        {
+          "text": "Dr. Benali",
+          "type": "PER"
+        },
+        {
+          "text": "GL",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Benali",
+          "predicate": "teachesSubject",
+          "object": "GL"
+        }
+      ]
+    },
+    {
+      "id": "ACR_006",
+      "category": "short_acronym",
+      "description": "Acronym at start of sentence (potential mis-tag as PROPN/PER)",
+      "text": "NLP est au cœur de nombreuses applications actuelles.",
+      "expected_entities": [
+        {
+          "text": "NLP",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ACR_007",
+      "category": "short_acronym",
+      "description": "Acronym after preposition 'sur'",
+      "text": "Sa thèse porte sur KG et la représentation des connaissances.",
+      "expected_entities": [
+        {
+          "text": "KG",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "ACR_008",
+      "category": "short_acronym",
+      "description": "Mixed-language sentence with multiple acronyms",
+      "text": "She works on AI, NLP and ML at the University of Edinburgh.",
+      "expected_entities": [
+        {
+          "text": "AI",
+          "type": "TOPIC"
+        },
+        {
+          "text": "NLP",
+          "type": "TOPIC"
+        },
+        {
+          "text": "ML",
+          "type": "TOPIC"
+        },
+        {
+          "text": "University of Edinburgh",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    // ======================================================================
+    // CATEGORY 4 — Multi-Entity Sentences (8 sentences)
+    // Goal: simultaneous extraction of PER + TOPIC + ORG in one sentence.
+    // ======================================================================
+    {
+      "id": "MULTI_001",
+      "category": "multi_entity",
+      "description": "Classic three-entity sentence (the original motivating case)",
+      "text": "Zoubida Kedad enseigne Data Mining à l'Université de Versailles.",
+      "expected_entities": [
+        {
+          "text": "Zoubida Kedad",
+          "type": "PER"
+        },
+        {
+          "text": "Data Mining",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Université de Versailles",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Zoubida Kedad",
+          "predicate": "teachesSubject",
+          "object": "Data Mining"
+        },
+        {
+          "subject": "Zoubida Kedad",
+          "predicate": "worksAt",
+          "object": "Université de Versailles"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_002",
+      "category": "multi_entity",
+      "description": "English three-entity sentence",
+      "text": "Prof. James Wilson teaches Knowledge Graphs at MIT.",
+      "expected_entities": [
+        {
+          "text": "Prof. James Wilson",
+          "type": "PER"
+        },
+        {
+          "text": "Knowledge Graphs",
+          "type": "TOPIC"
+        },
+        {
+          "text": "MIT",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. James Wilson",
+          "predicate": "teachesSubject",
+          "object": "Knowledge Graphs"
+        },
+        {
+          "subject": "Prof. James Wilson",
+          "predicate": "worksAt",
+          "object": "MIT"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_003",
+      "category": "multi_entity",
+      "description": "Two persons + one ORG",
+      "text": "Alice Durand et Bob Leclerc dirigent le laboratoire LIRMM.",
+      "expected_entities": [
+        {
+          "text": "Alice Durand",
+          "type": "PER"
+        },
+        {
+          "text": "Bob Leclerc",
+          "type": "PER"
+        },
+        {
+          "text": "LIRMM",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Alice Durand",
+          "predicate": "manages",
+          "object": "LIRMM"
+        },
+        {
+          "subject": "Bob Leclerc",
+          "predicate": "manages",
+          "object": "LIRMM"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_004",
+      "category": "multi_entity",
+      "description": "PER + two TOPICs + ORG",
+      "text": "Dr. Leila Amrani étudie le Web Sémantique et les Bases de Données au CNRS.",
+      "expected_entities": [
+        {
+          "text": "Dr. Leila Amrani",
+          "type": "PER"
+        },
+        {
+          "text": "Web Sémantique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Bases de Données",
+          "type": "TOPIC"
+        },
+        {
+          "text": "CNRS",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Leila Amrani",
+          "predicate": "studies",
+          "object": "Web Sémantique"
+        },
+        {
+          "subject": "Dr. Leila Amrani",
+          "predicate": "studies",
+          "object": "Bases de Données"
+        },
+        {
+          "subject": "Dr. Leila Amrani",
+          "predicate": "worksAt",
+          "object": "CNRS"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_005",
+      "category": "multi_entity",
+      "description": "PER + document + ORG",
+      "text": "Yann LeCun a publié un article sur les réseaux convolutifs à l'Université de New York.",
+      "expected_entities": [
+        {
+          "text": "Yann LeCun",
+          "type": "PER"
+        },
+        {
+          "text": "Université de New York",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Yann LeCun",
+          "predicate": "worksAt",
+          "object": "Université de New York"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_006",
+      "category": "multi_entity",
+      "description": "Two teaching relations in one sentence",
+      "text": "Prof. Rousseau enseigne Algorithmique et Compilation à l'Université de Rennes.",
+      "expected_entities": [
+        {
+          "text": "Prof. Rousseau",
+          "type": "PER"
+        },
+        {
+          "text": "Algorithmique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Compilation",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Université de Rennes",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Rousseau",
+          "predicate": "teachesSubject",
+          "object": "Algorithmique"
+        },
+        {
+          "subject": "Prof. Rousseau",
+          "predicate": "teachesSubject",
+          "object": "Compilation"
+        },
+        {
+          "subject": "Prof. Rousseau",
+          "predicate": "worksAt",
+          "object": "Université de Rennes"
+        }
+      ]
+    },
+    {
+      "id": "MULTI_007",
+      "category": "multi_entity",
+      "description": "Three persons in one sentence",
+      "text": "Ahmed Benali, Sara Lefèvre et Carlos Mendoza participent au séminaire de l'INRIA.",
+      "expected_entities": [
+        {
+          "text": "Ahmed Benali",
+          "type": "PER"
+        },
+        {
+          "text": "Sara Lefèvre",
+          "type": "PER"
+        },
+        {
+          "text": "Carlos Mendoza",
+          "type": "PER"
+        },
+        {
+          "text": "INRIA",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "MULTI_008",
+      "category": "multi_entity",
+      "description": "PER + TOPIC + LOC (no ORG)",
+      "text": "Tim Berners-Lee a inventé le World Wide Web à Genève.",
+      "expected_entities": [
+        {
+          "text": "Tim Berners-Lee",
+          "type": "PER"
+        },
+        {
+          "text": "World Wide Web",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Genève",
+          "type": "LOC"
+        }
+      ],
+      "expected_relations": []
+    },
+    // ======================================================================
+    // CATEGORY 5 — Ambiguous Entity Contexts (8 sentences)
+    // Goal: entity that is ambiguous by surface form; context must resolve it.
+    // ======================================================================
+    {
+      "id": "AMB_001",
+      "category": "ambiguous_context",
+      "description": "Amazon as tech company, not river/product",
+      "text": "Amazon publie un article sur l'IA générative.",
+      "expected_entities": [
+        {
+          "text": "Amazon",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "AMB_002",
+      "category": "ambiguous_context",
+      "description": "Paris as a person name (teaches → person context)",
+      "text": "Paris enseigne la physique quantique à ses étudiants.",
+      "expected_entities": [
+        {
+          "text": "Paris",
+          "type": "PER"
+        },
+        {
+          "text": "physique quantique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Paris",
+          "predicate": "teachesSubject",
+          "object": "physique quantique"
+        }
+      ]
+    },
+    {
+      "id": "AMB_003",
+      "category": "ambiguous_context",
+      "description": "Apple as organisation publishing a paper",
+      "text": "Apple a publié un article sur le traitement du langage naturel.",
+      "expected_entities": [
+        {
+          "text": "Apple",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "AMB_004",
+      "category": "ambiguous_context",
+      "description": "Washington as researcher (person), not city/state",
+      "text": "Washington étudie les graphes de connaissances à l'Université de Montréal.",
+      "expected_entities": [
+        {
+          "text": "Washington",
+          "type": "PER"
+        },
+        {
+          "text": "Université de Montréal",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Washington",
+          "predicate": "worksAt",
+          "object": "Université de Montréal"
+        }
+      ]
+    },
+    {
+      "id": "AMB_005",
+      "category": "ambiguous_context",
+      "description": "Sage as a person, not plant or software",
+      "text": "Dr. Sage enseigne la Logique Formelle à l'École Polytechnique.",
+      "expected_entities": [
+        {
+          "text": "Dr. Sage",
+          "type": "PER"
+        },
+        {
+          "text": "Logique Formelle",
+          "type": "TOPIC"
+        },
+        {
+          "text": "École Polytechnique",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Sage",
+          "predicate": "teachesSubject",
+          "object": "Logique Formelle"
+        }
+      ]
+    },
+    {
+      "id": "AMB_006",
+      "category": "ambiguous_context",
+      "description": "Oracle as tech company, not mythological figure",
+      "text": "Oracle contribue au développement de standards OWL.",
+      "expected_entities": [
+        {
+          "text": "Oracle",
+          "type": "ORG"
+        },
+        {
+          "text": "OWL",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "AMB_007",
+      "category": "ambiguous_context",
+      "description": "Milan as person name in academic context",
+      "text": "Milan présente ses recherches sur l'inférence logique.",
+      "expected_entities": [
+        {
+          "text": "Milan",
+          "type": "PER"
+        },
+        {
+          "text": "inférence logique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Milan",
+          "predicate": "studies",
+          "object": "inférence logique"
+        }
+      ]
+    },
+    {
+      "id": "AMB_008",
+      "category": "ambiguous_context",
+      "description": "Google as ORG publishing research, not a verb",
+      "text": "Google publie des travaux sur les réseaux de neurones profonds.",
+      "expected_entities": [
+        {
+          "text": "Google",
+          "type": "ORG"
+        },
+        {
+          "text": "réseaux de neurones profonds",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    // ======================================================================
+    // CATEGORY 6 — Noise Robustness (8 sentences)
+    // Goal: extra punctuation, irregular spacing, mixed case, typos.
+    //       System should still extract the core entities.
+    // ======================================================================
+    {
+      "id": "NOISE_001",
+      "category": "noise_robustness",
+      "description": "Double dot after title abbreviation",
+      "text": "Prof.. Dupont   enseigne   Data Mining ???",
+      "expected_entities": [
+        {
+          "text": "Dupont",
+          "type": "PER"
+        },
+        {
+          "text": "Data Mining",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dupont",
+          "predicate": "teachesSubject",
+          "object": "Data Mining"
+        }
+      ]
+    },
+    {
+      "id": "NOISE_002",
+      "category": "noise_robustness",
+      "description": "Ellipsis and exclamation mark interrupting sentence",
+      "text": "Dr Martin enseigne...AI!",
+      "expected_entities": [
+        {
+          "text": "Dr Martin",
+          "type": "PER"
+        },
+        {
+          "text": "AI",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr Martin",
+          "predicate": "teachesSubject",
+          "object": "AI"
+        }
+      ]
+    },
+    {
+      "id": "NOISE_003",
+      "category": "noise_robustness",
+      "description": "Excessive whitespace between tokens",
+      "text": "Marie   Dupont    travaille   à   l'Université   de   Lyon.",
+      "expected_entities": [
+        {
+          "text": "Marie Dupont",
+          "type": "PER"
+        },
+        {
+          "text": "Université de Lyon",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Marie Dupont",
+          "predicate": "worksAt",
+          "object": "Université de Lyon"
+        }
+      ]
+    },
+    {
+      "id": "NOISE_004",
+      "category": "noise_robustness",
+      "description": "All-uppercase sentence",
+      "text": "PROF. AHMED BENALI ENSEIGNE RDF À L'UNIVERSITÉ DE VERSAILLES.",
+      "expected_entities": [
+        {
+          "text": "AHMED BENALI",
+          "type": "PER"
+        },
+        {
+          "text": "RDF",
+          "type": "TOPIC"
+        },
+        {
+          "text": "UNIVERSITÉ DE VERSAILLES",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "AHMED BENALI",
+          "predicate": "teachesSubject",
+          "object": "RDF"
+        }
+      ]
+    },
+    {
+      "id": "NOISE_005",
+      "category": "noise_robustness",
+      "description": "Comma-separated list with noise tokens",
+      "text": "Le cours couvre : RDF, OWL, SPARQL... et bien plus encore !",
+      "expected_entities": [
+        {
+          "text": "RDF",
+          "type": "TOPIC"
+        },
+        {
+          "text": "OWL",
+          "type": "TOPIC"
+        },
+        {
+          "text": "SPARQL",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "NOISE_006",
+      "category": "noise_robustness",
+      "description": "Mixed case in entity name",
+      "text": "pRoF. lEiLa aMrAnI enseigne le web sémantique.",
+      "expected_entities": [
+        {
+          "text": "web sémantique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "NOISE_007",
+      "category": "noise_robustness",
+      "description": "Accents stripped from a French organisation name",
+      "text": "Paul Moreau dirige le Centre de Recherche en Informatique.",
+      "expected_entities": [
+        {
+          "text": "Paul Moreau",
+          "type": "PER"
+        },
+        {
+          "text": "Centre de Recherche en Informatique",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Paul Moreau",
+          "predicate": "manages",
+          "object": "Centre de Recherche en Informatique"
+        }
+      ]
+    },
+    {
+      "id": "NOISE_008",
+      "category": "noise_robustness",
+      "description": "Sentence fragment (no verb)",
+      "text": "Zoubida Kedad — Web Sémantique — Université de Versailles.",
+      "expected_entities": [
+        {
+          "text": "Zoubida Kedad",
+          "type": "PER"
+        },
+        {
+          "text": "Web Sémantique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Université de Versailles",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": []
+    },
+    // ======================================================================
+    // CATEGORY 7 — Long Academic Sentences (8 sentences)
+    // Goal: sentences ≥20 tokens with multiple entities and relations.
+    // ======================================================================
+    {
+      "id": "LONG_001",
+      "category": "long_academic",
+      "description": "Canonical long sentence from the task description",
+      "text": "Professor John Smith from the University of Oxford teaches Machine Learning and Knowledge Graphs in the Computer Science department.",
+      "expected_entities": [
+        {
+          "text": "Professor John Smith",
+          "type": "PER"
+        },
+        {
+          "text": "University of Oxford",
+          "type": "ORG"
+        },
+        {
+          "text": "Machine Learning",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Knowledge Graphs",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Computer Science",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Professor John Smith",
+          "predicate": "worksAt",
+          "object": "University of Oxford"
+        },
+        {
+          "subject": "Professor John Smith",
+          "predicate": "teachesSubject",
+          "object": "Machine Learning"
+        },
+        {
+          "subject": "Professor John Smith",
+          "predicate": "teachesSubject",
+          "object": "Knowledge Graphs"
+        }
+      ]
+    },
+    {
+      "id": "LONG_002",
+      "category": "long_academic",
+      "description": "French long sentence with multiple relations",
+      "text": "La Professeure Isabelle Bernard enseigne le Web Sémantique, les Ontologies et le Traitement Automatique du Langage à l'Université de Strasbourg depuis cinq ans.",
+      "expected_entities": [
+        {
+          "text": "Isabelle Bernard",
+          "type": "PER"
+        },
+        {
+          "text": "Web Sémantique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Ontologies",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Traitement Automatique du Langage",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Université de Strasbourg",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Isabelle Bernard",
+          "predicate": "worksAt",
+          "object": "Université de Strasbourg"
+        },
+        {
+          "subject": "Isabelle Bernard",
+          "predicate": "teachesSubject",
+          "object": "Web Sémantique"
+        },
+        {
+          "subject": "Isabelle Bernard",
+          "predicate": "teachesSubject",
+          "object": "Ontologies"
+        }
+      ]
+    },
+    {
+      "id": "LONG_003",
+      "category": "long_academic",
+      "description": "Long paragraph with two different persons",
+      "text": "Dr. Karim Nasri et Prof. Nadia Ouali collaborent sur un projet de recherche portant sur les Graphes de Connaissances et le Raisonnement Automatique à l'INRIA Saclay.",
+      "expected_entities": [
+        {
+          "text": "Dr. Karim Nasri",
+          "type": "PER"
+        },
+        {
+          "text": "Prof. Nadia Ouali",
+          "type": "PER"
+        },
+        {
+          "text": "Graphes de Connaissances",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Raisonnement Automatique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "INRIA Saclay",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Karim Nasri",
+          "predicate": "worksAt",
+          "object": "INRIA Saclay"
+        },
+        {
+          "subject": "Prof. Nadia Ouali",
+          "predicate": "worksAt",
+          "object": "INRIA Saclay"
+        }
+      ]
+    },
+    {
+      "id": "LONG_004",
+      "category": "long_academic",
+      "description": "Long bilingual sentence mixing French and English terms",
+      "text": "During the workshop on Linked Data organised by the Université Paris-Saclay, Prof. Elena Smirnova presented her latest findings on OWL reasoning and SPARQL query optimisation.",
+      "expected_entities": [
+        {
+          "text": "Prof. Elena Smirnova",
+          "type": "PER"
+        },
+        {
+          "text": "Université Paris-Saclay",
+          "type": "ORG"
+        },
+        {
+          "text": "OWL",
+          "type": "TOPIC"
+        },
+        {
+          "text": "SPARQL",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Linked Data",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Prof. Elena Smirnova",
+          "predicate": "worksAt",
+          "object": "Université Paris-Saclay"
+        }
+      ]
+    },
+    {
+      "id": "LONG_005",
+      "category": "long_academic",
+      "description": "Long sentence: author + publication + topic + org",
+      "text": "Zoubida Kedad a rédigé un article intitulé 'Extraction de connaissances à partir de textes' publié dans la revue de l'Université de Versailles.",
+      "expected_entities": [
+        {
+          "text": "Zoubida Kedad",
+          "type": "PER"
+        },
+        {
+          "text": "Université de Versailles",
+          "type": "ORG"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Zoubida Kedad",
+          "predicate": "worksAt",
+          "object": "Université de Versailles"
+        }
+      ]
+    },
+    {
+      "id": "LONG_006",
+      "category": "long_academic",
+      "description": "Multi-clause sentence with conjunctions",
+      "text": "John Doe studies AI at MIT, while Jane Smith researches NLP at the University of Edinburgh, and both collaborate on a joint KG project.",
+      "expected_entities": [
+        {
+          "text": "John Doe",
+          "type": "PER"
+        },
+        {
+          "text": "AI",
+          "type": "TOPIC"
+        },
+        {
+          "text": "MIT",
+          "type": "ORG"
+        },
+        {
+          "text": "Jane Smith",
+          "type": "PER"
+        },
+        {
+          "text": "NLP",
+          "type": "TOPIC"
+        },
+        {
+          "text": "University of Edinburgh",
+          "type": "ORG"
+        },
+        {
+          "text": "KG",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "John Doe",
+          "predicate": "studies",
+          "object": "AI"
+        },
+        {
+          "subject": "John Doe",
+          "predicate": "worksAt",
+          "object": "MIT"
+        },
+        {
+          "subject": "Jane Smith",
+          "predicate": "studies",
+          "object": "NLP"
+        },
+        {
+          "subject": "Jane Smith",
+          "predicate": "worksAt",
+          "object": "University of Edinburgh"
+        }
+      ]
+    },
+    {
+      "id": "LONG_007",
+      "category": "long_academic",
+      "description": "Long sentence: list of topics taught at a specific university",
+      "text": "À l'Université de Grenoble, le département d'informatique propose des cours de Bases de Données, d'Algorithmique Avancée, de Compilation et de Génie Logiciel.",
+      "expected_entities": [
+        {
+          "text": "Université de Grenoble",
+          "type": "ORG"
+        },
+        {
+          "text": "Bases de Données",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Algorithmique Avancée",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Compilation",
+          "type": "TOPIC"
+        },
+        {
+          "text": "Génie Logiciel",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "LONG_008",
+      "category": "long_academic",
+      "description": "Long sentence with nested org name and multiple persons",
+      "text": "Les travaux de Dr. Fatima El-Amine et de Prof. Sébastien Vial publiés dans le cadre du laboratoire LIG de l'Université Grenoble Alpes portent sur l'apprentissage automatique et le raisonnement symbolique.",
+      "expected_entities": [
+        {
+          "text": "Dr. Fatima El-Amine",
+          "type": "PER"
+        },
+        {
+          "text": "Prof. Sébastien Vial",
+          "type": "PER"
+        },
+        {
+          "text": "Université Grenoble Alpes",
+          "type": "ORG"
+        },
+        {
+          "text": "apprentissage automatique",
+          "type": "TOPIC"
+        },
+        {
+          "text": "raisonnement symbolique",
+          "type": "TOPIC"
+        }
+      ],
+      "expected_relations": [
+        {
+          "subject": "Dr. Fatima El-Amine",
+          "predicate": "worksAt",
+          "object": "Université Grenoble Alpes"
+        },
+        {
+          "subject": "Prof. Sébastien Vial",
+          "predicate": "worksAt",
+          "object": "Université Grenoble Alpes"
+        }
+      ]
+    }
+  ]
+}

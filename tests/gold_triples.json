@@ -1,62 +1,146 @@
 {
   "_comment": "Gold standard triples for each test case. Each entry maps a cas_id to a list of [subject, predicate, object] triples that the pipeline MUST produce. Subject and object match the rdfs:label of the entity (case-insensitive). Predicate is the OWL property local-name.",
-
   "cas_01": [
-    ["Alice Martin", "teachesSubject", "bases de données"],
-    ["Alice Martin", "worksAt",        "CNRS"]
+    [
+      "Alice Martin",
+      "teachesSubject",
+      "bases de données"
+    ],
+    [
+      "Alice Martin",
+      "worksAt",
+      "CNRS"
+    ]
   ],
-
   "cas_02": [
-    ["Mohamed Bennani", "author",   "Intelligence Artificielle"],
-    ["Mohamed Bennani", "worksAt",  "ENSIAS"]
+    [
+      "Mohamed Bennani",
+      "author",
+      "Intelligence Artificielle"
+    ],
+    [
+      "Mohamed Bennani",
+      "worksAt",
+      "ENSIAS"
+    ]
   ],
-
   "cas_03": [
-    ["Jean Dupont", "author",      "SPARQL"],
-    ["Jean Dupont", "author",      "OWL"],
-    ["Jean Dupont", "locatedIn",   "Lyon"]
+    [
+      "Jean Dupont",
+      "author",
+      "SPARQL"
+    ],
+    [
+      "Jean Dupont",
+      "author",
+      "OWL"
+    ],
+    [
+      "Jean Dupont",
+      "locatedIn",
+      "Lyon"
+    ]
   ],
-
   "cas_04": [
-    ["Sophie Durand", "teachesSubject", "JSON-LD"],
-    ["Sophie Durand", "teachesSubject", "Turtle"],
-    ["Sophie Durand", "worksAt",        "Université de Nantes"]
+    [
+      "Sophie Durand",
+      "teachesSubject",
+      "JSON-LD"
+    ],
+    [
+      "Sophie Durand",
+      "teachesSubject",
+      "Turtle"
+    ],
+    [
+      "Sophie Durand",
+      "worksAt",
+      "Université de Nantes"
+    ]
   ],
-
   "cas_05": [
-    ["Pierre Rousseau", "manages",  "département informatique"],
-    ["Pierre Rousseau", "worksAt",  "École Polytechnique de Paris"]
+    [
+      "Pierre Rousseau",
+      "manages",
+      "département informatique"
+    ],
+    [
+      "Pierre Rousseau",
+      "worksAt",
+      "École Polytechnique de Paris"
+    ]
   ],
-
   "cas_06": [
-    ["Fatima El Amrani", "studiesAt",        "Université Mohammed V"],
-    ["Fatima El Amrani", "collaboratesWith",  "Casablanca"]
+    [
+      "Fatima El Amrani",
+      "studiesAt",
+      "Université Mohammed V"
+    ],
+    [
+      "Fatima El Amrani",
+      "collaboratesWith",
+      "Casablanca"
+    ]
   ],
-
   "cas_07": [
-    ["Laura Sanchez", "author", "RDFS"]
+    [
+      "Laura Sanchez",
+      "author",
+      "RDFS"
+    ]
   ],
-
   "cas_08": [
-    ["Thomas Bernard", "teachesSubject", "mathématiques"],
-    ["Thomas Bernard", "teachesSubject", "physique"],
-    ["Thomas Bernard", "worksAt",        "Université de Toulouse"]
+    [
+      "Thomas Bernard",
+      "teachesSubject",
+      "mathématiques"
+    ],
+    [
+      "Thomas Bernard",
+      "teachesSubject",
+      "physique"
+    ],
+    [
+      "Thomas Bernard",
+      "worksAt",
+      "Université de Toulouse"
+    ]
   ],
-
   "cas_09": [
-    ["Marie Leblanc", "worksAt",          "laboratoire GREYC"],
-    ["Marie Leblanc", "collaboratesWith", "Université de Versailles"]
+    [
+      "Marie Leblanc",
+      "worksAt",
+      "laboratoire GREYC"
+    ],
+    [
+      "Marie Leblanc",
+      "collaboratesWith",
+      "Université de Versailles"
+    ]
   ],
-
   "cas_10": [
-    ["David Cohen", "author",   "ontologie médicale"],
-    ["David Cohen", "worksAt",  "CHU"]
+    [
+      "David Cohen",
+      "author",
+      "ontologie médicale"
+    ],
+    [
+      "David Cohen",
+      "worksAt",
+      "CHU"
+    ]
   ],
-
   "cas_11": [
-    ["Emily Johnson", "teachesSubject", "science"],
-    ["Emily Johnson", "worksAt",        "MIT"]
+    [
+      "Emily Johnson",
+      "teachesSubject",
+      "science"
+    ],
+    [
+      "Emily Johnson",
+      "worksAt",
+      "MIT"
+    ]
   ],
-
   "cas_12": []
 }
